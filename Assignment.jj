@@ -1,9 +1,7 @@
 
-
 PARSER_BEGIN(Assignment)
 
-public class Assignment{
-
+public class Assignment {
 
     public static void main(String args []) {
         Assignment parser = new Assignment(System.in);
@@ -30,37 +28,58 @@ TOKEN : {
     <PARAMETER_NAME: (["a"-"z"])+>
 }
 
-void factor(): {}
+int factor():
+{Token t; int eval;}
 {
-    <INTEGER_LITERAL> |
-    <PARAMETER_NAME> |
-    <FUNCTION_NAME> "(" expr() ")"
+    t = <INTEGER_LITERAL>
+        {return Integer.parseInt(t.image);}
+
+    | <PARAMETER_NAME>
+        {return 0;}
+
+    | <FUNCTION_NAME> "(" eval = expr() ")"
+        {return 0;}
 }
 
-void term(): {}
+int term():
+{int result, rhs;}
 {
-    factor() (<MUL> term())*
+    result = factor() (<MUL> rhs = term()
+        {result *= rhs;}
+    )*
+
+    {return result;}
 }
 
-void expr(): {}
+int expr():
+{int result, rhs;}
 {
-    term() (<PLUS> expr())*
+    result = term() (<PLUS> rhs = expr()
+        {result += rhs;}
+    )*
+
+    {return result;}
 }
 
-void function(): {}
+void function():
+{}
 {
     "DEF " <FUNCTION_NAME> " " <PARAMETER_NAME> " { " expr() " } ;" <NEWLINE>
 }
 
-void main(): {}
+int main():
+{int result;}
 {
-    "DEF MAIN { " expr() " } ;" <NEWLINE>
+    "DEF MAIN { " result = expr() " } ;" <NEWLINE>
+        {return result;}
 }
 
-void program(): {}
+int program():
+{int result;}
 {
     (function())*
-    main()
+    result = main()
     (function())*
     <EOF>
+        {return result;}
 }
