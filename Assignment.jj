@@ -20,3 +20,47 @@ public class Assignment{
 }
 
 PARSER_END(Assignment)
+
+TOKEN : {
+    "DEF" | "MAIN" | "(" | ")" | "{" | "}" | ";" |
+    <SPACE: " "> | <NEWLINE: "\n"> |
+    <PLUS: "+"> | <MUL: "*"> |
+    <INTEGER_LITERAL: (["0"-"9"])+> |
+    <FUNCTION_NAME: (["A"-"Z"])+> |
+    <PARAMETER_NAME: (["a"-"z"])+>
+}
+
+void factor(): {}
+{
+    <INTEGER_LITERAL> |
+    <PARAMETER_NAME> |
+    <FUNCTION_NAME> "(" expr() ")"
+}
+
+void term(): {}
+{
+    factor() (<MUL> term())*
+}
+
+void expr(): {}
+{
+    term() (<PLUS> expr())*
+}
+
+void function(): {}
+{
+    "DEF " <FUNCTION_NAME> " " <PARAMETER_NAME> " { " expr() " } ;" <NEWLINE>
+}
+
+void main(): {}
+{
+    "DEF MAIN { " expr() " } ;" <NEWLINE>
+}
+
+void program(): {}
+{
+    (function())*
+    main()
+    (function())*
+    <EOF>
+}
