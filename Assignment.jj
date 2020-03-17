@@ -27,7 +27,7 @@ interface IEvaluate {
 }
 
 
-class Factor implements IEvaluate {
+class Literal implements IEvaluate {
     private int constant;
     private String param;
     private String call;
@@ -36,17 +36,17 @@ class Factor implements IEvaluate {
 
     private IEvaluate jeff;
 
-    public Factor(int constant) {
+    public Literal(int constant) {
         this.constant = constant;
         this.type = Type.CONST;
     }
 
-    public Factor(String param) {
+    public Literal(String param) {
         this.param = param;
         this.type = Type.PARAM;
     }
 
-    public Factor(String call, IEvaluate arg) {
+    public Literal(String call, IEvaluate arg) {
         this.call = call;
         this.arg = arg;
         this.type = Type.CALL;
@@ -82,39 +82,37 @@ class Factor implements IEvaluate {
     }
 }
 
-class Term implements IEvaluate {
+class BinFold implements IEvaluate {
+    private final IEvaluate base;
     private final List<IEvaluate> operands;
+    private final Type type;
 
-    public Term(List<IEvaluate> operands) {
+    public BinFold(IEvaluate base, List<IEvaluate> operands, Type type) {
+        this.base = base;
         this.operands = operands;
+        this.type = type;
     }
 
     @Override
     public int evaluate(String param, int arg) {
-        int result = 1;
+        int result = base.evaluate(param, arg);
 
-        for (IEvaluate factor : operands){
-            result *= factor.evaluate(param, arg);
+        for (IEvaluate o : operands){
+            switch (type) {
+                case MUL:
+                    result *= o.evaluate(param, arg);
+                    break;
+                case PLUS:
+                    result += o.evaluate(param, arg);
+                    break;
+            }
         }
         return result;
     }
-}
 
-class Expr implements IEvaluate {
-    private final List<IEvaluate> operands;
-
-    public Expr(List<IEvaluate> operands) {
-        this.operands = operands;
-    }
-
-    @Override
-    public int evaluate(String param, int arg) {
-        int result = 0;
-
-        for (IEvaluate term : operands){
-            result += term.evaluate(param, arg);
-        }
-        return result;
+    enum Type {
+        MUL,
+        PLUS
     }
 }
 
@@ -166,74 +164,44 @@ TOKEN : {
 }
 
 IEvaluate factor():
-{
-    Token t;
-    IEvaluate expr;
-}
+{ Token t; IEvaluate arg; }
 {
     t = <INTEGER_LITERAL>
-        {
-            return new Factor(Integer.parseInt(t.image));
-        }
+        { return new Literal(Integer.parseInt(t.image)); }
 
     | t = <PARAMETER_NAME>
-        {
-            return new Factor(t.image);
-        }
+        { return new Literal(t.image); }
 
-    | t = <FUNCTION_NAME> "(" expr = expr() ")"
-        {
-            return new Factor(t.image, expr);
-        }
+    | t = <FUNCTION_NAME> "(" arg = expr() ")"
+        { return new Literal(t.image, arg); }
 }
 
 IEvaluate term():
+{ IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
-    List<IEvaluate> operands = new ArrayList();
-    IEvaluate lhs, rhs;
-}
-{
-    lhs = factor()
-        {
-            operands.add(lhs);
-        }
-    (<MUL> rhs = term()
-        {
-            operands.add(rhs);
-        }
+    lhs = factor() (<MUL> rhs = term()
+        { operands.add(rhs); }
     )*
 
     {
-        return new Term(operands);
+        return new BinFold(lhs, operands, BinFold.Type.MUL);
     }
 }
 
 IEvaluate expr():
+{ IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
-    List<IEvaluate> operands = new ArrayList();
-    IEvaluate lhs, rhs;
-}
-{
-    lhs = term()
-        {
-            operands.add(lhs);
-        }
-    (<PLUS> rhs = expr()
-        {
-            operands.add(rhs);
-        }
+    lhs = term() (<PLUS> rhs = expr()
+        { operands.add(rhs); }
     )*
 
     {
-        return new Expr(operands);
+        return new BinFold(lhs, operands, BinFold.Type.PLUS);
     }
 }
 
 void function():
-{
-    Token t1, t2;
-    IEvaluate body;
-}
+{ Token t1, t2; IEvaluate body; }
 {
     "DEF " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr() " } ;" <NEWLINE>
     {
@@ -242,9 +210,7 @@ void function():
 }
 
 IEvaluate main():
-{
-    IEvaluate body;
-}
+{ IEvaluate body; }
 {
     "DEF MAIN { " body = expr() " } ;" <NEWLINE>
     {
@@ -253,15 +219,13 @@ IEvaluate main():
 }
 
 int program():
-{
-    IEvaluate body;
-}
+{ IEvaluate body; }
 {
     (function())*
     body = main()
     (function())*
     <EOF>
     {
-        return body.evaluate("", 0);
+        return body.evaluate(null, Integer.MIN_VALUE);
     }
 }
