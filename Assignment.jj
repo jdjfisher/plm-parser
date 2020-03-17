@@ -1,5 +1,10 @@
-
 PARSER_BEGIN(Assignment)
+
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+
 
 public class Assignment {
 
@@ -17,6 +22,123 @@ public class Assignment {
     }
 }
 
+interface IEvaluate {
+    public int evaluate(Map<String, Function> functions, String param, int arg);
+}
+
+
+class Factor implements IEvaluate {
+    private int constant;
+    private String param;
+    private String call;
+    private IEvaluate arg;
+    private Type type;
+
+    private IEvaluate jeff;
+
+    public Factor(int constant) {
+        this.constant = constant;
+        this.type = Type.CONST;
+    }
+
+    public Factor(String param) {
+        this.param = param;
+        this.type = Type.PARAM;
+    }
+
+    public Factor(String call, IEvaluate arg) {
+        this.call = call;
+        this.arg = arg;
+        this.type = Type.CALL;
+    }
+
+    @Override
+    public int evaluate(Map<String, Function> functions, String param, int arg) {
+        switch(this.type) {
+            case CONST:
+                return constant;
+            case PARAM:
+                if (this.param.equals(param)) {
+                    return arg;
+                } else {
+                    System.exit(-1);
+                    // throw new ParseException("Undefined parameter: " + this.param);
+                }
+            case CALL:
+                if (functions.containsKey(this.call)) {
+                    Function function = functions.get(call);
+                    int arg_value = this.arg.evaluate(functions, param, arg);
+                    return function.call(functions, arg_value);
+                } else {
+                    // throw new ParseException("Undefined parameter: " + this.param);
+                }
+                break;
+        }
+
+        System.exit(-1);
+        return -1;
+        // throw new ParseException("FATAL ERROR");
+    }
+
+    private enum Type {
+        CONST,
+        PARAM,
+        CALL
+    }
+}
+
+class Term implements IEvaluate {
+    private final List<IEvaluate> operands;
+
+    public Term(List<IEvaluate> operands) {
+        this.operands = operands;
+    }
+
+    @Override
+    public int evaluate(Map<String, Function> functions, String param, int arg) {
+        int result = 1;
+
+        for (IEvaluate factor : operands){
+            result *= factor.evaluate(functions, param, arg);
+        }
+        return result;
+    }
+}
+
+class Expr implements IEvaluate {
+    private final List<IEvaluate> operands;
+
+    public Expr(List<IEvaluate> operands) {
+        this.operands = operands;
+    }
+
+    @Override
+    public int evaluate(Map<String, Function> functions, String param, int arg) {
+        int result = 0;
+
+        for (IEvaluate term : operands){
+            result += term.evaluate(functions, param, arg);
+        }
+        return result;
+    }
+}
+
+class Function {
+    public final String name;
+    public final String param;
+    public final IEvaluate body;
+
+    public Function(String name, String param, IEvaluate body) {
+        this.name = name;
+        this.param = param;
+        this.body = body;
+    }
+
+    public int call(Map<String, Function> functions, int arg) {
+        return body.evaluate(functions, this.param, arg);
+    }
+}
+
 PARSER_END(Assignment)
 
 TOKEN : {
@@ -28,58 +150,114 @@ TOKEN : {
     <PARAMETER_NAME: (["a"-"z"])+>
 }
 
-int factor():
-{Token t; int eval;}
+IEvaluate factor():
+{
+    Token t;
+    IEvaluate expr;
+}
 {
     t = <INTEGER_LITERAL>
-        {return Integer.parseInt(t.image);}
+        {
+            return new Factor(Integer.parseInt(t.image));
+        }
 
-    | <PARAMETER_NAME>
-        {return 0;}
+    | t = <PARAMETER_NAME>
+        {
+            return new Factor(t.image);
+        }
 
-    | <FUNCTION_NAME> "(" eval = expr() ")"
-        {return 0;}
+    | t = <FUNCTION_NAME> "(" expr = expr() ")"
+        {
+            return new Factor(t.image, expr);
+        }
 }
 
-int term():
-{int result, rhs;}
+IEvaluate term():
 {
-    result = factor() (<MUL> rhs = term()
-        {result *= rhs;}
+    List<IEvaluate> operands = new ArrayList();
+    IEvaluate lhs, rhs;
+}
+{
+    lhs = factor()
+        {
+            operands.add(lhs);
+        }
+    (<MUL> rhs = term()
+        {
+            operands.add(rhs);
+        }
     )*
 
-    {return result;}
+    {
+        return new Term(operands);
+    }
 }
 
-int expr():
-{int result, rhs;}
+IEvaluate expr():
 {
-    result = term() (<PLUS> rhs = expr()
-        {result += rhs;}
+    List<IEvaluate> operands = new ArrayList();
+    IEvaluate lhs, rhs;
+}
+{
+    lhs = term()
+        {
+            operands.add(lhs);
+        }
+    (<PLUS> rhs = expr()
+        {
+            operands.add(rhs);
+        }
     )*
 
-    {return result;}
+    {
+        return new Expr(operands);
+    }
 }
 
-void function():
-{}
+void function(Map<String, Function> functions):
 {
-    "DEF " <FUNCTION_NAME> " " <PARAMETER_NAME> " { " expr() " } ;" <NEWLINE>
+    Token t1, t2;
+    IEvaluate body;
+}
+{
+    "DEF " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr() " } ;" <NEWLINE>
+    {
+        String name = t1.image;
+        String param = t2.image;
+
+        if (functions.containsKey(name)) {
+            throw new ParseException("Duplicate function: " + name);
+
+        } else {
+            Function function = new Function(name, param, body);
+
+            functions.put(name, function);
+        }
+    }
 }
 
-int main():
-{int result;}
+IEvaluate main():
 {
-    "DEF MAIN { " result = expr() " } ;" <NEWLINE>
-        {return result;}
+    IEvaluate body;
+}
+{
+    "DEF MAIN { " body = expr() " } ;" <NEWLINE>
+    {
+        return body;
+    }
 }
 
 int program():
-{int result;}
 {
-    (function())*
-    result = main()
-    (function())*
+    Map<String, Function> functions = new HashMap();
+    IEvaluate body;
+}
+{
+    (function(functions))*
+    body = main()
+    (function(functions))*
     <EOF>
-        {return result;}
+    {
+        return body.evaluate(functions, "", 0);
+    }
 }
