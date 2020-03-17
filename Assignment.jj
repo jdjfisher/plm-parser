@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Stack;
 
 
 public class Assignment {
@@ -15,17 +16,24 @@ public class Assignment {
             int result = parser.program();
             System.out.println("PASS");
             System.out.println(result);
-        } catch (Throwable e) {
+
+        } catch (DivergenceException e) {
+            System.out.println("PASS");
+            System.out.println("DIVERGENCE");
+
+        } catch (ParseException e) {
             System.out.println("FAIL");
             System.err.println("Syntax check failed: " + e.getMessage());
+
         }
     }
 }
 
 interface IEvaluate {
-    public int evaluate(String param, int arg) throws ParseException;
+    public int evaluate(String param, int arg) throws ParseException, DivergenceException;
 }
 
+class DivergenceException extends Exception {}
 
 class Literal implements IEvaluate {
     private int constant;
@@ -53,7 +61,7 @@ class Literal implements IEvaluate {
     }
 
     @Override
-    public int evaluate(String param, int arg) throws ParseException {
+    public int evaluate(String param, int arg) throws ParseException, DivergenceException {
         switch(this.type) {
             case CONST:
                 return constant;
@@ -89,7 +97,7 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(String param, int arg) throws ParseException {
+    public int evaluate(String param, int arg) throws ParseException, DivergenceException {
         int result = base.evaluate(param, arg);
 
         for (IEvaluate o : operands){
@@ -112,8 +120,9 @@ class BinFold implements IEvaluate {
 
 class Function {
     private static final Map<String, Function> functions = new HashMap();
+    private static final Stack<String> call_stack = new Stack();
 
-    public static int call(String name, int arg) throws ParseException {
+    public static int call(String name, int arg) throws ParseException, DivergenceException {
         if (Function.functions.containsKey(name)) {
             Function f = functions.get(name);
             return f.call(arg);
@@ -122,7 +131,7 @@ class Function {
         }
     }
 
-    public static void define(String name, String param, IEvaluate body) throws ParseException{
+    public static void define(String name, String param, IEvaluate body) throws ParseException {
         if (Function.functions.containsKey(name)) {
             throw new ParseException("duplicate function definition " + name);
         } else {
@@ -140,8 +149,16 @@ class Function {
         this.body = body;
     }
 
-    public int call(int arg) throws ParseException {
-        return this.body.evaluate(this.param, arg);
+    public int call(int arg) throws ParseException, DivergenceException {
+        if (Function.call_stack.contains(name)) {
+            throw new DivergenceException();
+        }
+
+        Function.call_stack.push(name);
+        int result = this.body.evaluate(this.param, arg);
+        Function.call_stack.pop();
+
+        return result;
     }
 }
 
@@ -176,9 +193,7 @@ IEvaluate term():
         { operands.add(rhs); }
     )*
 
-    {
-        return new BinFold(lhs, operands, BinFold.Type.MUL);
-    }
+    { return new BinFold(lhs, operands, BinFold.Type.MUL); }
 }
 
 IEvaluate expr():
@@ -188,9 +203,7 @@ IEvaluate expr():
         { operands.add(rhs); }
     )*
 
-    {
-        return new BinFold(lhs, operands, BinFold.Type.PLUS);
-    }
+    { return new BinFold(lhs, operands, BinFold.Type.PLUS); }
 }
 
 void function():
@@ -206,19 +219,15 @@ IEvaluate main():
 { IEvaluate body; }
 {
     "DEF MAIN { " body = expr() " } ;" <NEWLINE>
-    {
-        return body;
-    }
+    { return body; }
 }
 
-int program():
+int program() throws DivergenceException:
 { IEvaluate body; }
 {
     (function())*
     body = main()
     (function())*
     <EOF>
-    {
-        return body.evaluate(null, Integer.MIN_VALUE);
-    }
+    { return body.evaluate(null, Integer.MIN_VALUE); }
 }
