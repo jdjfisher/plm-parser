@@ -1,6 +1,6 @@
 .SILENT:
 
-# Targetd testfile
+# Targeted testfile
 PLM_SRC_FILE = test1.txt
 
 init:
