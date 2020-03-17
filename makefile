@@ -1,5 +1,7 @@
 .SILENT:
 
+PLM_SRC_FILE = test1.txt
+
 init:
 	sudo apt install default-jdk javacc
 
@@ -14,5 +16,5 @@ clean:
 	rm -r build src
 
 run: all
-	echo '---------------- Assignment.jj -------------------'
-	java -cp build Assignment < test1.txt
+	echo '----------------' $(PLM_SRC_FILE) '----------------'
+	java -cp build Assignment < $(PLM_SRC_FILE)
