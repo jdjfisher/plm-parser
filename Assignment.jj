@@ -61,7 +61,7 @@ class Literal implements IEvaluate {
                 if (this.var.equals(param)) {
                     return arg;
                 } else {
-                    throw new ParseException("undefined variable " + this.param);
+                    throw new ParseException("undefined variable " + this.var);
                 }
             case CALL:
                 int arg_value = this.arg.evaluate(param, arg);
@@ -111,7 +111,7 @@ class BinFold implements IEvaluate {
 }
 
 class Function {
-    private static Map<String, Function> functions = new HashMap();
+    private static final Map<String, Function> functions = new HashMap();
 
     public static int call(String name, int arg) throws ParseException {
         if (Function.functions.containsKey(name)) {
