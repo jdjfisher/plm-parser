@@ -256,7 +256,7 @@ IEvaluate main():
 int program() throws DivergenceException:
 { IEvaluate body; }
 {
-    (LOOKAHEAD(2) function())*
+    (LOOKAHEAD(3) function())*
     body = main()
     (function())*
     <EOF>
