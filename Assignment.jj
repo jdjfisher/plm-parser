@@ -4,6 +4,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Stack;
 
 
@@ -19,7 +21,14 @@ public class Assignment {
         } catch (ParseException e) {
             System.out.println("FAIL");
 
-            int line = e.currentToken.next.beginLine;
+            // System.out.println("t<" + e.currentToken.next + ">");
+            // for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
+            // System.out.println();
+            // for(String a : e.tokenImage) System.out.print(a + ",");
+            // System.out.println();
+            // int line = e.currentToken.next.beginLine;
+
+            int line = -1;
             String message = e.getMessage();
 
             System.err.println(line);
@@ -29,29 +38,31 @@ public class Assignment {
             System.out.println("PASS");
             System.out.println("DIVERGENCE");
 
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
         }
     }
 }
 
 
 interface IEvaluate {
-    public int evaluate(String param, int arg) throws ParseException, DivergenceException;
+    public int evaluate(int arg) throws Exception, DivergenceException;
 }
 
 
 class DivergenceException extends Exception {
     public DivergenceException() {
-      super();
+        super();
     }
 
     public DivergenceException(String message) {
-      super(message);
+        super(message);
     }
 }
 
+
 class Literal implements IEvaluate {
     private int constant;
-    private String var;
     private String f_call;
     private IEvaluate f_arg;
     private Type type;
@@ -61,42 +72,39 @@ class Literal implements IEvaluate {
         this.type = Type.CONST;
     }
 
-    public Literal(String var) {
-        this.var = var;
-        this.type = Type.VAR;
+    public Literal() {
+        this.type = Type.PARAM;
     }
 
     public Literal(String f_call, IEvaluate f_arg) {
         this.f_call = f_call;
         this.f_arg = f_arg;
         this.type = Type.CALL;
+
+        Function.registerCall(f_call);
     }
 
     @Override
-    public int evaluate(String param, int arg) throws ParseException, DivergenceException {
+    public int evaluate(int arg) throws Exception, DivergenceException {
         switch(this.type) {
             case CONST:
                 // Return the boxed constant
                 return constant;
-            case VAR:
-                // Check if the variable matches the parent functions parameter
-                if (this.var.equals(param)) {
-                    return arg;
-                } else {
-                    throw new ParseException("undefined variable " + this.var);
-                }
+            case PARAM:
+                // Return the argument
+                return arg;
             case CALL:
                 // Evaluate the function argument
-                int value = this.f_arg.evaluate(param, arg);
+                int value = this.f_arg.evaluate(arg);
                 // Call the function with the evaluation
                 return Function.call(this.f_call, value);
         }
 
-        throw new ParseException("unknown literal type");
+        throw new Exception("unknown literal type");
     }
 
     private enum Type {
-        CONST, VAR, CALL
+        CONST, PARAM, CALL
     }
 }
 
@@ -112,21 +120,21 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(String param, int arg) throws ParseException, DivergenceException {
+    public int evaluate(int arg) throws Exception, DivergenceException {
         // Evaluate the base into result
-        int result = base.evaluate(param, arg);
+        int result = base.evaluate(arg);
 
         // Fold the other terms into result using the appropriate binary op
         for (IEvaluate o : operands){
             switch (type) {
                 case MUL:
-                    result *= o.evaluate(param, arg);
+                    result *= o.evaluate(arg);
                     break;
                 case PLUS:
-                    result += o.evaluate(param, arg);
+                    result += o.evaluate(arg);
                     break;
                 default:
-                    throw new ParseException("unknown bin op type");
+                    throw new Exception("unknown bin op type");
             }
         }
         return result;
@@ -140,25 +148,44 @@ class BinFold implements IEvaluate {
 class Function {
     private static final Map<String, Function> functions = new HashMap();
     private static final Stack<String> call_stack = new Stack();
+    private static final Set<String> undefined_calls = new HashSet();
 
-    public static int call(String name, int arg) throws ParseException, DivergenceException {
+    public static int call(String name, int arg) throws Exception, DivergenceException {
         // Check the function is defined
-        if (Function.functions.containsKey(name)) {
+        if (Function.isDefined(name)) {
             // Call the function
             Function f = functions.get(name);
             return f.call(arg);
         } else {
-            throw new ParseException("undefined function " + name);
+            throw new Exception("undefined function " + name);
         }
     }
 
     public static void define(String name, String param, IEvaluate body) throws ParseException {
         // Check the definition is distinct
-        if (Function.functions.containsKey(name)) {
+        if (Function.isDefined(name)) {
             throw new ParseException("duplicate function definition " + name);
         } else {
             // Register a function object in the programs function map
             Function.functions.put(name, new Function(name, param, body));
+            // Resolve any undefined calls
+            undefined_calls.remove(name);
+        }
+    }
+
+    public static void registerCall(String name) {
+        if (!Function.isDefined(name)) {
+            undefined_calls.add(name);
+        }
+    }
+
+    public static boolean isDefined(String name) {
+        return functions.containsKey(name);
+    }
+
+    public static void validateCalls() throws Exception {
+        if (!undefined_calls.isEmpty()) {
+            throw new Exception("undefined function call " + undefined_calls.iterator().next());
         }
     }
 
@@ -172,7 +199,7 @@ class Function {
         this.body = body;
     }
 
-    public int call(int arg) throws ParseException, DivergenceException {
+    public int call(int arg) throws Exception, DivergenceException {
         // Check for a recursive stack trace
         if (Function.call_stack.contains(name)) {
             throw new DivergenceException();
@@ -180,7 +207,7 @@ class Function {
 
         // Evaluate the function call and regulate the call stack
         Function.call_stack.push(name);
-        int result = this.body.evaluate(this.param, arg);
+        int result = this.body.evaluate(arg);
         Function.call_stack.pop();
 
         return result;
@@ -189,7 +216,7 @@ class Function {
 
 PARSER_END(Assignment)
 
-// No skipped tokens, unnecessary tokens should result in a failed parse
+// No skip tokens, unnecessary tokens should result in a failed parse
 
 // PLM token descriptor
 TOKEN : {
@@ -201,7 +228,8 @@ TOKEN : {
     <PARAMETER_NAME: (["a"-"z"])+>
 }
 
-IEvaluate factor():
+
+IEvaluate factor(String p) throws Exception:
 { Token t; IEvaluate arg; }
 {
     t = <INTEGER_LITERAL>
@@ -209,57 +237,74 @@ IEvaluate factor():
         { return new Literal(Integer.parseInt(t.image)); }
 
     | t = <PARAMETER_NAME>
-        // Return the parameter reference boxed as a Literal
-        { return new Literal(t.image); }
+        {
+            String var = t.image;
+            // Check if the variable matches the parent functions parameter
+            if (!var.equals(p)) {
+                throw new Exception("undefined variable " + var);
+            }
+            // Return the parameter reference boxed as a Literal
+            return new Literal();
+        }
 
-    | t = <FUNCTION_NAME> "(" arg = expr() ")"
+    | t = <FUNCTION_NAME> "(" arg = expr(p) ")"
         // Return the function call boxed as a Literal
         { return new Literal(t.image, arg); }
 }
 
-IEvaluate term():
+
+IEvaluate term(String p) throws Exception:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
-    lhs = factor() (LOOKAHEAD(2) <MUL> rhs = term()
+    lhs = factor(p) (LOOKAHEAD(2) <MUL> rhs = term(p)
         { operands.add(rhs); }
     )*
     // Return an object respresentation of a multiplicative fold on factors
     { return new BinFold(lhs, operands, BinFold.Type.MUL); }
 }
 
-IEvaluate expr():
+
+IEvaluate expr(String p) throws Exception:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
-    lhs = term() (LOOKAHEAD(2) <PLUS> rhs = expr()
+    lhs = term(p) (LOOKAHEAD(2) <PLUS> rhs = expr(p)
         { operands.add(rhs); }
     )*
     // Return an object respresentation of a addative fold on terms
     { return new BinFold(lhs, operands, BinFold.Type.PLUS); }
 }
 
-void function():
+
+void function() throws Exception:
 { Token t1, t2; IEvaluate body; }
 {
-    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr() " } ;" <NEWLINE>
-    // Define a new function using the name, parameter and body tokens
+    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" <NEWLINE>
+    // Define a new function using the name, parameter and body
     { Function.define(t1.image, t2.image, body); }
 }
 
-IEvaluate main():
+
+IEvaluate main() throws Exception:
 { IEvaluate body; }
 {
-    <DEF> " " <MAIN> " { " body = expr() " } ;" <NEWLINE>
+    <DEF> " " <MAIN> " { " body = expr(null) " } ;" <NEWLINE>
     // Return the main body entry point
     { return body; }
 }
 
-int program() throws DivergenceException:
+
+int program() throws Exception:
 { IEvaluate body; }
 {
+    // Parse the program
     (LOOKAHEAD(3) function())*
     body = main()
     (function())*
     <EOF>
-    // After parsing the whole program, evaluate the main body with dummy argument
-    { return body.evaluate(null, Integer.MIN_VALUE); }
+    {
+        // Verify all function calls are defined
+        Function.validateCalls();
+        // After parsing the whole program, evaluate the main body with dummy argument
+        return body.evaluate(Integer.MIN_VALUE);
+    }
 }
