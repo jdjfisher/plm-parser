@@ -61,12 +61,22 @@ public class Assignment {
         Token currentToken = e.currentToken;
         Token nextToken = e.currentToken.next;
 
+        switch (nextToken.kind) {
+            case SPACE:
+                return "Unexpected space";
+            case NEWLINE:
+                return "Unexpected new line";
+        }
+
         switch (expectedTokenKind) {
             case DEF:
                 return "Missing keyword DEF";
             case MAIN:
                 return "Missing MAIN function";
             case FUNCTION_NAME:
+                if (nextToken.kind == MAIN) {
+                    return "Duplicate MAIN definition";
+                }
                 return "Missing function name";
             case PARAMETER_NAME:
                 return "Missing parameter name";
@@ -84,10 +94,12 @@ public class Assignment {
                                 return "Invalid function name " + currentToken.image + nextToken.image + "...";
                             case PARAMETER_NAME:
                                 return "Invalid parameter name " + currentToken.image + nextToken.image + "...";
-                        }
-                        break;
+                        }                    
                 }
             case LBRACE:
+                if (nextToken.kind == PARAMETER_NAME) {
+                    return "MAIN definition should have no parameter";
+                }
             case RBRACE:
             case SCOLON:
                 return "Missing " + e.tokenImage[expectedTokenKind];
