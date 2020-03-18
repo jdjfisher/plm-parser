@@ -22,11 +22,11 @@ public class Assignment {
             System.out.println("FAIL");
 
             // Decode ParseException
-            System.out.println("t<" + e.currentToken.next + ">");
-            for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
-            System.out.println();
-            for(String a : e.tokenImage) System.out.print(a + ",");
-            System.out.println();
+            // System.out.println("t<" + e.currentToken.next + ">");
+            // for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
+            // System.out.println();
+            // for(String a : e.tokenImage) System.out.print(a + ",");
+            // System.out.println();
 
             int line = e.currentToken.next.beginLine;
             String message = e.getMessage();
@@ -59,23 +59,8 @@ class DivergenceException extends Exception { }
 class CustomException extends Exception {
     private final int line;
 
-    public CustomException() {
-        super();
-        line = 0;
-    }
-
-    public CustomException(String m) {
-        super(m);
-        line = 0;
-    }
-
     public CustomException(String m, int line) {
         super(m);
-        this.line = line;
-    }
-
-    public CustomException(int line) {
-        super();
         this.line = line;
     }
 
@@ -100,18 +85,18 @@ class Literal implements IEvaluate {
         this.type = Type.PARAM;
     }
 
-    public Literal(String call_name, IEvaluate call_arg) {
+    public Literal(String call_name, IEvaluate call_arg, int line) {
         this.call_name = call_name;
         this.call_arg = call_arg;
         this.type = Type.CALL;
         // Make function manager acknowledge this defined call
-        Function.registerCall(call_name);
+        Function.registerCall(call_name, line);
     }
 
     @Override
     public int evaluate(int arg) throws CustomException, DivergenceException {
         // Provide a different evaluation based on literal type
-        switch(this.type) {
+        switch(type) {
             case CONST:
                 // Return the boxed constant
                 return constant;
@@ -122,9 +107,9 @@ class Literal implements IEvaluate {
                 // Evaluate the argument and call the function with the value
                 int value = call_arg.evaluate(arg);
                 return Function.call(call_name, value);
+            default:
+                throw new Error("FATAL: null literal type");
         }
-
-        throw new CustomException("unknown literal type");
     }
 
     // Enumeration of possible Literal types
@@ -159,7 +144,7 @@ class BinFold implements IEvaluate {
                     result += o.evaluate(arg);
                     break;
                 default:
-                    throw new CustomException("unknown bin op type");
+                    throw new Error("FATAL: null BinFold type");
             }
         }
         return result;
@@ -173,23 +158,19 @@ class BinFold implements IEvaluate {
 
 class Function {
     private static final Map<String, Function> functions = new HashMap();
-    private static final Set<String> undefined_calls = new HashSet();
+    private static final Map<String, Integer> undefined_calls = new HashMap();
     private static final Stack<String> call_stack = new Stack();
 
+
     public static int call(String name, int arg) throws CustomException, DivergenceException {
-        // Check the function is defined
-        if (Function.isDefined(name)) {
-            // Call the function
-            return functions.get(name).call(arg);
-        } else {
-            throw new CustomException("undefined function " + name);
-        }
+        // Call the function
+        return functions.get(name).call(arg);
     }
 
-    public static void define(String name, String param, IEvaluate body) throws CustomException {
+    public static void define(String name, String param, IEvaluate body, int line) throws CustomException {
         // Check the definition is distinct
         if (Function.isDefined(name)) {
-            throw new CustomException("duplicate function definition " + name);
+            throw new CustomException("Duplicate function definition " + name, line);
         } else {
             // Register a function object in the programs function map
             Function.functions.put(name, new Function(name, param, body));
@@ -198,10 +179,10 @@ class Function {
         }
     }
 
-    public static void registerCall(String name) {
+    public static void registerCall(String name, int line) {
         // If the function is undefined, store the call
         if (!Function.isDefined(name)) {
-            undefined_calls.add(name);
+            undefined_calls.putIfAbsent(name, line);
         }
     }
 
@@ -213,7 +194,11 @@ class Function {
     public static void validateCalls() throws CustomException {
         // If there is an undefined function call, throw an error
         if (!undefined_calls.isEmpty()) {
-            throw new CustomException("undefined function call " + undefined_calls.iterator().next());
+            // Extract first undefined function call and its line number
+            Map.Entry entry = undefined_calls.entrySet().iterator().next();
+            // Throw an appropriate exception
+            throw new CustomException("Undefined function call " +
+                entry.getKey(), (int) entry.getValue());
         }
     }
 
@@ -271,7 +256,7 @@ IEvaluate factor(String param) throws CustomException:
             String var = t.image;
             // Check the variable matches the parent functions parameter
             if (!var.equals(param)) {
-                throw new CustomException("undefined variable " + var);
+                throw new CustomException("Undefined variable " + var, t.beginLine);
             }
             // Return the parameter reference boxed as a Literal
             return new Literal(param);
@@ -279,7 +264,7 @@ IEvaluate factor(String param) throws CustomException:
 
     | t = <FUNCTION_NAME> "(" call_arg = expr(param) ")"
         // Return the function call boxed as a Literal
-        { return new Literal(t.image, call_arg); }
+        { return new Literal(t.image, call_arg, t.beginLine); }
 }
 
 
@@ -306,11 +291,11 @@ IEvaluate expr(String p) throws CustomException:
 
 
 void function() throws CustomException:
-{ Token t1, t2; IEvaluate body; }
+{ Token t1, t2, t3; IEvaluate body; }
 {
-    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" <NEWLINE>
+    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" t3 = <NEWLINE>
     // Define a new function using the name, parameter and body
-    { Function.define(t1.image, t2.image, body); }
+    { Function.define(t1.image, t2.image, body, t3.beginLine); }
 }
 
 
