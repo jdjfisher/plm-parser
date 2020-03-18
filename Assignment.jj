@@ -1,15 +1,12 @@
 PARSER_BEGIN(Assignment)
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Stack;
+
+import java.util.*;
 
 
+// Parser class
 public class Assignment {
+
     public static void main(String args []) {
         // Instantain parser object
         Assignment parser = new Assignment(System.in);
@@ -24,36 +21,68 @@ public class Assignment {
         } catch (ParseException e) {
             System.out.println("FAIL");
 
-            // System.out.println("t<" + e.currentToken.next + ">");
-            // for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
-            // System.out.println();
-            // for(String a : e.tokenImage) System.out.print(a + ",");
-            // System.out.println();
-            // int line = e.currentToken.next.beginLine;
+            // Decode ParseException
+            System.out.println("t<" + e.currentToken.next + ">");
+            for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
+            System.out.println();
+            for(String a : e.tokenImage) System.out.print(a + ",");
+            System.out.println();
 
-            int line = -1;
+            int line = e.currentToken.next.beginLine;
             String message = e.getMessage();
 
             System.err.println(line);
             System.err.println(message);
 
+        } catch (CustomException e) {
+            System.out.println("FAIL");
+
+            System.err.println(e.getLine());
+            System.err.println(e.getMessage());
+
         } catch (DivergenceException e) {
             System.out.println("PASS");
             System.out.println("DIVERGENCE");
-
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
         }
     }
 }
 
 
 interface IEvaluate {
-    public int evaluate(int arg) throws Exception, DivergenceException;
+    public int evaluate(int arg) throws CustomException, DivergenceException;
 }
 
 
 class DivergenceException extends Exception { }
+
+
+class CustomException extends Exception {
+    private final int line;
+
+    public CustomException() {
+        super();
+        line = 0;
+    }
+
+    public CustomException(String m) {
+        super(m);
+        line = 0;
+    }
+
+    public CustomException(String m, int line) {
+        super(m);
+        this.line = line;
+    }
+
+    public CustomException(int line) {
+        super();
+        this.line = line;
+    }
+
+    public int getLine() {
+        return line;
+    }
+}
 
 
 class Literal implements IEvaluate {
@@ -80,7 +109,7 @@ class Literal implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws Exception, DivergenceException {
+    public int evaluate(int arg) throws CustomException, DivergenceException {
         // Provide a different evaluation based on literal type
         switch(this.type) {
             case CONST:
@@ -95,7 +124,7 @@ class Literal implements IEvaluate {
                 return Function.call(call_name, value);
         }
 
-        throw new Exception("unknown literal type");
+        throw new CustomException("unknown literal type");
     }
 
     // Enumeration of possible Literal types
@@ -116,7 +145,7 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws Exception, DivergenceException {
+    public int evaluate(int arg) throws CustomException, DivergenceException {
         // Evaluate the base into result
         int result = base.evaluate(arg);
 
@@ -130,7 +159,7 @@ class BinFold implements IEvaluate {
                     result += o.evaluate(arg);
                     break;
                 default:
-                    throw new Exception("unknown bin op type");
+                    throw new CustomException("unknown bin op type");
             }
         }
         return result;
@@ -147,20 +176,20 @@ class Function {
     private static final Set<String> undefined_calls = new HashSet();
     private static final Stack<String> call_stack = new Stack();
 
-    public static int call(String name, int arg) throws Exception, DivergenceException {
+    public static int call(String name, int arg) throws CustomException, DivergenceException {
         // Check the function is defined
         if (Function.isDefined(name)) {
             // Call the function
             return functions.get(name).call(arg);
         } else {
-            throw new Exception("undefined function " + name);
+            throw new CustomException("undefined function " + name);
         }
     }
 
-    public static void define(String name, String param, IEvaluate body) throws ParseException {
+    public static void define(String name, String param, IEvaluate body) throws CustomException {
         // Check the definition is distinct
         if (Function.isDefined(name)) {
-            throw new ParseException("duplicate function definition " + name);
+            throw new CustomException("duplicate function definition " + name);
         } else {
             // Register a function object in the programs function map
             Function.functions.put(name, new Function(name, param, body));
@@ -177,13 +206,14 @@ class Function {
     }
 
     public static boolean isDefined(String name) {
+        // Query the function map
         return functions.containsKey(name);
     }
 
-    public static void validateCalls() throws Exception {
+    public static void validateCalls() throws CustomException {
         // If there is an undefined function call, throw an error
         if (!undefined_calls.isEmpty()) {
-            throw new Exception("undefined function call " + undefined_calls.iterator().next());
+            throw new CustomException("undefined function call " + undefined_calls.iterator().next());
         }
     }
 
@@ -197,7 +227,7 @@ class Function {
         this.body = body;
     }
 
-    public int call(int arg) throws Exception, DivergenceException {
+    public int call(int arg) throws CustomException, DivergenceException {
         // Check for a recursive stack trace
         if (Function.call_stack.contains(name)) {
             throw new DivergenceException();
@@ -212,7 +242,9 @@ class Function {
     }
 }
 
+
 PARSER_END(Assignment)
+
 
 // No skip tokens, unnecessary tokens should result in a parse failure
 
@@ -227,7 +259,7 @@ TOKEN : {
 }
 
 
-IEvaluate factor(String param) throws Exception:
+IEvaluate factor(String param) throws CustomException:
 { Token t; IEvaluate call_arg; }
 {
     t = <INTEGER_LITERAL>
@@ -239,7 +271,7 @@ IEvaluate factor(String param) throws Exception:
             String var = t.image;
             // Check the variable matches the parent functions parameter
             if (!var.equals(param)) {
-                throw new Exception("undefined variable " + var);
+                throw new CustomException("undefined variable " + var);
             }
             // Return the parameter reference boxed as a Literal
             return new Literal(param);
@@ -251,7 +283,7 @@ IEvaluate factor(String param) throws Exception:
 }
 
 
-IEvaluate term(String p) throws Exception:
+IEvaluate term(String p) throws CustomException:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
     lhs = factor(p) (LOOKAHEAD(2) <MUL> rhs = term(p)
@@ -262,7 +294,7 @@ IEvaluate term(String p) throws Exception:
 }
 
 
-IEvaluate expr(String p) throws Exception:
+IEvaluate expr(String p) throws CustomException:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
     lhs = term(p) (LOOKAHEAD(2) <PLUS> rhs = expr(p)
@@ -273,7 +305,7 @@ IEvaluate expr(String p) throws Exception:
 }
 
 
-void function() throws Exception:
+void function() throws CustomException:
 { Token t1, t2; IEvaluate body; }
 {
     <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" <NEWLINE>
@@ -282,7 +314,7 @@ void function() throws Exception:
 }
 
 
-IEvaluate main() throws Exception:
+IEvaluate main() throws CustomException:
 { IEvaluate body; }
 {
     <DEF> " " <MAIN> " { " body = expr(null) " } ;" <NEWLINE>
@@ -291,7 +323,7 @@ IEvaluate main() throws Exception:
 }
 
 
-int program() throws Exception:
+int program() throws CustomException, DivergenceException:
 { IEvaluate body; }
 {
     // Parse the program
