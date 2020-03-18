@@ -34,9 +34,8 @@ public class Assignment {
             }
             System.err.println("\n" + s.toString());
 
-
             // Decode ParseException
-            String message = formMessage2(e);
+            String message = formMessage(e);
             int line = e.currentToken.next.beginLine;
 
             // Output line number and message to error stream
@@ -57,127 +56,93 @@ public class Assignment {
     }
 
     private static String formMessage(ParseException e) {
-        int expectedTokenKind = e.expectedTokenSequences[0][0];
-        Token currentToken = e.currentToken;
-        Token nextToken = e.currentToken.next;
-
-        switch (nextToken.kind) {
-            case SPACE:
-                return "Unexpected space";
-            case NEWLINE:
-                return "Unexpected new line";
-        }
-
-        switch (expectedTokenKind) {
-            case DEF:
-                return "Missing keyword DEF";
-            case MAIN:
-                return "Missing MAIN function";
-            case FUNCTION_NAME:
-                if (nextToken.kind == MAIN) {
-                    return "Duplicate MAIN definition";
-                }
-                return "Missing function name";
-            case PARAMETER_NAME:
-                return "Missing parameter name";
-            case SPACE:
-                switch (nextToken.kind) {
-                    case LBRACE:
-                    case RBRACE:
-                    case SCOLON:
-                    case NEWLINE:
-                    case EOF:
-                        return "Missing space after " + currentToken;
-                    default:
-                        switch (currentToken.kind) {
-                            case FUNCTION_NAME:
-                                return "Invalid function name " + currentToken.image + nextToken.image + "...";
-                            case PARAMETER_NAME:
-                                return "Invalid parameter name " + currentToken.image + nextToken.image + "...";
-                        }
-                }
-            case LBRACE:
-                if (nextToken.kind == PARAMETER_NAME) {
-                    return "MAIN definition should have no parameter";
-                }
-            case RBRACE:
-            case SCOLON:
-                return "Missing " + e.tokenImage[expectedTokenKind];
-            case INTEGER_LITERAL:
-                return "Missing function body";
-            case EOF:
-                return "Missing end of file character";
-        }
-
-        return "Unclassified parse error";
-    }
-
-    private static String formMessage2(ParseException e) {
         int at = e.currentToken.kind;
         int found = e.currentToken.next.kind;
+        Set<Integer> expected = new HashSet();
 
-        switch (found) {
-            case SPACE:
-                return "Unexpected space";
-            case NEWLINE:
-                return "Unexpected new line";
+        // Form a set of expected token kinds
+        for (int[] i : e.expectedTokenSequences)
+            expected.add(i[0]);
+
+        //
+
+        if (found == SPACE)
+            return "Unexpected space";
+
+        if (expected.contains(SPACE)) {
+            switch (found) {
+                case LBRACE:
+                case RBRACE:
+                case SCOLON:
+                case NEWLINE:
+                case EOF:
+                    return "Missing whitespace";
+            }
         }
 
-        int expected = e.expectedTokenSequences[0][0];
+        if (expected.contains(DEF))
+            return "Missing keyword DEF";
 
-        switch (expected) {
-            case DEF:
-                return "Missing keyword DEF";
-            case MAIN:
-                return "Missing MAIN function";
-            case FUNCTION_NAME:
-                if (found == MAIN) {
-                    return "Duplicate MAIN definition";
-                } else {
-                    return "Missing function name";
-                }
-            case PARAMETER_NAME:
-                return "Missing parameter name";
-            case LBRACE:
-                if (found == PARAMETER_NAME) {
-                    return "MAIN definition should have no parameter";
-                } else {
-                    return "Missing {";
-                }
-            case RBRACE:
-                return "Missing }";
-            case LBRACK:
-                return "Missing (";
-            case RBRACK:
-                return "Missing )";
-            case SCOLON:
-                return "Missing ;";
-            case NEWLINE:
-                return "Missing new line character";
-            case EOF:
-                return "Missing end of file character";
-            case SPACE:
+        if (expected.contains(FUNCTION_NAME) && !expected.contains(INTEGER_LITERAL))
+            return "Missing function name";
+
+        if (expected.contains(FUNCTION_NAME) && found == MAIN)
+            return "Duplicate MAIN definition";
+
+        if (at == FUNCTION_NAME)
+            return "Invalid function name";
+
+        if (expected.contains(PARAMETER_NAME) && expected.size() == 1)
+            return "Missing parameter name";
+
+        if (at == PARAMETER_NAME)
+            return "Invalid parameter name";
+
+        if (expected.contains(LBRACE)) {
+            if (found == PARAMETER_NAME) {
+                return "MAIN definition should have no parameter";
+            } else {
+                return "Missing {";
+            }
+        }
+
+        if (expected.contains(RBRACE))
+            return "Missing }";
+
+        if (expected.contains(LBRACK))
+            return "Missing (";
+
+        if (expected.contains(LBRACK))
+            return "Missing )";
+
+        if (expected.contains(SCOLON))
+            return "Missing ;";
+
+        if (expected.contains(INTEGER_LITERAL) && expected.contains(PARAMETER_NAME) && expected.contains(FUNCTION_NAME)) {
+            if (at == LBRACK) {
+                return "Missing function call argument";
+
+            } else if (at == SPACE) {
                 switch (found) {
-                    case LBRACE:
                     case RBRACE:
-                    case SCOLON:
                     case NEWLINE:
                     case EOF:
-                        return "Missing space";
+                        return "Missing function body";
+                    default:
+                        return "Missing Literal";
                 }
+            }
+        }
 
-                switch (at) {
-                    case FUNCTION_NAME:
-                        return "Invalid function name";
-                    case PARAMETER_NAME:
-                        return "Invalid parameter name";
-                }
-            case INTEGER_LITERAL:
-                if (at == LBRACK) {
-                    return "Invalid function call argument";
-                } else if (at == SPACE) {
-                    return "Invalid function body";
-                }
+        switch (found) {
+            case NEWLINE:
+                return "Unexpected new line";
+            case EOF:
+                return "Unexpected end of file";
+            case RBRACK:
+                return "Unexpected )";
+            case RBRACE:
+                return "Unexpected }";
         }
 
         return "Unclassified parse error";
@@ -215,6 +180,7 @@ class Literal implements IEvaluate {
     private IEvaluate call_arg;
     private Type type;
 
+
     public Literal(int constant) {
         this.constant = constant;
         this.type = Type.CONST;
@@ -228,8 +194,8 @@ class Literal implements IEvaluate {
         this.call_name = call_name;
         this.call_arg = call_arg;
         this.type = Type.CALL;
-        // Make function manager acknowledge this defined call
-        Function.registerCall(call_name, line);
+        // Acknowledge this function call
+        Program.registerCall(call_name, line);
     }
 
     @Override
@@ -245,7 +211,7 @@ class Literal implements IEvaluate {
             case CALL:
                 // Evaluate the argument and call the function with the value
                 int value = call_arg.evaluate(arg);
-                return Function.call(call_name, value);
+                return Program.call(call_name, value);
             default:
                 throw new Error("FATAL: null literal type");
         }
@@ -261,6 +227,7 @@ class BinFold implements IEvaluate {
     private final IEvaluate base;
     private final List<IEvaluate> operands;
     private final Type type;
+
 
     public BinFold(IEvaluate base, List<IEvaluate> operands, Type type) {
         this.base = base;
@@ -296,73 +263,76 @@ class BinFold implements IEvaluate {
 }
 
 class Function {
+    public final String name;
+    public final String param;
+    public final IEvaluate body;
+    public final int line;
+
+
+    public Function(String name, String param, IEvaluate body, int line) {
+        this.name = name;
+        this.param = param;
+        this.body = body;
+        this.line = line;
+    }
+}
+
+class Program {
     private static final Map<String, Function> functions = new HashMap();
     private static final Map<String, Integer> undefined_calls = new HashMap();
     private static final Stack<String> call_stack = new Stack();
 
 
     public static int call(String name, int arg) throws MyParseException, DivergenceException {
-        // Call the function
-        return functions.get(name).call(arg);
+        // Check for a recursive stack trace
+        if (Program.call_stack.contains(name)) {
+            throw new DivergenceException();
+        }
+
+        // Get the function
+        Function function = Program.functions.get(name);
+
+        // Evaluate the function call and regulate the call stack
+        Program.call_stack.push(name);
+        int result = function.body.evaluate(arg);
+        Program.call_stack.pop();
+
+        return result;
     }
 
-    public static void define(String name, String param, IEvaluate body, int line) throws MyParseException {
+    public static void registerFunction(Function f) throws MyParseException {
         // Check the definition is distinct
-        if (Function.isDefined(name)) {
-            throw new MyParseException("Duplicate function definition " + name, line);
+        if (Program.functions.containsKey(f.name)) {
+            throw new MyParseException("Duplicate function definition " + f.name, f.line);
         } else {
             // Register a function object in the programs function map
-            Function.functions.put(name, new Function(name, param, body));
+            Program.functions.put(f.name, f);
             // Resolve any undefined calls to the function
-            undefined_calls.remove(name);
+            undefined_calls.remove(f.name);
         }
     }
 
     public static void registerCall(String name, int line) {
         // If the function is undefined, store the call
-        if (!Function.isDefined(name)) {
+        if (!Program.functions.containsKey(name)) {
             undefined_calls.putIfAbsent(name, line);
         }
     }
 
-    public static boolean isDefined(String name) {
-        // Query the function map
-        return functions.containsKey(name);
-    }
+    public static void validate() throws MyParseException {
+        // If the MAIN function has not been defined, throw an error
+        if (!Program.functions.containsKey("MAIN")) {
+            throw new MyParseException("Undefined MAIN function", 0);
+        }
 
-    public static void validateCalls() throws MyParseException {
-        // If there is an undefined function call, throw an error
+        // If there is a call to an undefined function, throw an error
         if (!undefined_calls.isEmpty()) {
             // Extract first undefined function call and its line number
             Map.Entry entry = undefined_calls.entrySet().iterator().next();
-            // Throw an appropriate exception
-            throw new MyParseException("Undefined function " +
-                entry.getKey(), (int) entry.getValue());
+
+            throw new MyParseException("Undefined function " + entry.getKey(),
+                                                      (int) entry.getValue());
         }
-    }
-
-    public final String name;
-    public final String param;
-    public final IEvaluate body;
-
-    private Function(String name, String param, IEvaluate body) {
-        this.name = name;
-        this.param = param;
-        this.body = body;
-    }
-
-    public int call(int arg) throws MyParseException, DivergenceException {
-        // Check for a recursive stack trace
-        if (Function.call_stack.contains(name)) {
-            throw new DivergenceException();
-        }
-
-        // Evaluate the function call and regulate the call stack
-        Function.call_stack.push(name);
-        int result = this.body.evaluate(arg);
-        Function.call_stack.pop();
-
-        return result;
     }
 }
 
@@ -373,7 +343,8 @@ PARSER_END(Assignment)
 // No skip tokens, unnecessary tokens should result in a parse failure
 
 // PLM token descriptor
-TOKEN : {
+TOKEN:
+{
     <DEF: "DEF"> | <MAIN: "MAIN"> | <LBRACE: "{"> | <RBRACE: "}"> |
     <LBRACK: "("> | <RBRACK: ")"> | <SCOLON: ";"> | <SPACE: " "> |
     <NEWLINE: "\n"> | <PLUS: "+"> | <MUL: "*"> |
@@ -383,11 +354,14 @@ TOKEN : {
 
 
 IEvaluate factor(String param) throws MyParseException:
-{ Token t; IEvaluate call_arg; }
+{
+    Token t; IEvaluate call_arg;
+}
 {
     t = <INTEGER_LITERAL>
-        // Return the constant value boxed as a Literal
-        { return new Literal(Integer.parseInt(t.image)); }
+        {   // Return the constant value boxed as a Literal
+            return new Literal(Integer.parseInt(t.image));
+        }
 
     | t = <PARAMETER_NAME>
         {
@@ -401,65 +375,73 @@ IEvaluate factor(String param) throws MyParseException:
         }
 
     | t = <FUNCTION_NAME> "(" call_arg = expr(param) ")"
-        // Return the function call boxed as a Literal
-        { return new Literal(t.image, call_arg, t.beginLine); }
+        {   // Return the function call boxed as a Literal
+            return new Literal(t.image, call_arg, t.beginLine);
+        }
 }
 
 
 IEvaluate term(String p) throws MyParseException:
-{ IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
+{
+    IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
+}
 {
     lhs = factor(p) (LOOKAHEAD(2) <MUL> rhs = term(p)
         { operands.add(rhs); }
     )*
-    // Return an object respresentation of a multiplicative fold on factors
-    { return new BinFold(lhs, operands, BinFold.Type.MUL); }
+
+    {   // Return an object respresentation of a multiplicative fold on factors
+        return new BinFold(lhs, operands, BinFold.Type.MUL);
+    }
 }
 
 
 IEvaluate expr(String p) throws MyParseException:
-{ IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
+{
+    IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
+}
 {
     lhs = term(p) (LOOKAHEAD(2) <PLUS> rhs = expr(p)
         { operands.add(rhs); }
     )*
-    // Return an object respresentation of a addative fold on terms
-    { return new BinFold(lhs, operands, BinFold.Type.PLUS); }
+
+    {   // Return an object respresentation of a addative fold on terms
+        return new BinFold(lhs, operands, BinFold.Type.PLUS);
+    }
 }
 
 
-void function() throws MyParseException:
-{ Token t1, t2, t3; IEvaluate body; }
+Function function() throws MyParseException:
 {
-    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " " <LBRACE> " "
-    body = expr(t2.image) " " <RBRACE> " " <SCOLON> t3 = <NEWLINE>
-    // Define a new function using the name, parameter and body
-    { Function.define(t1.image, t2.image, body, t3.beginLine); }
+    Token t1, t2 = new Token(); IEvaluate body;
 }
-
-
-IEvaluate main() throws MyParseException:
-{ IEvaluate body; }
 {
-    <DEF> " " <MAIN> " " <LBRACE> " " body = expr(null) " " <RBRACE> " "
-    <SCOLON> <NEWLINE>
-    // Return the main body entry point
-    { return body; }
-}
+    <DEF> <SPACE>                           // Function signature
+        ( t1 = <FUNCTION_NAME> <SPACE> t2 = <PARAMETER_NAME> | t1 = <MAIN> )
 
+    <SPACE> <LBRACE> <SPACE>                // Function body
+        body = expr(t2.image)
+    <SPACE> <RBRACE> <SPACE> <SCOLON> <NEWLINE>
+
+    {   // Define a new function using the name, parameter, body and line number
+        return new Function(t1.image, t2.image, body, t1.beginLine);
+    }
+}
 
 int program() throws MyParseException, DivergenceException:
-{ IEvaluate body; }
 {
-    // Parse the program
-    (LOOKAHEAD(3) function())*
-    body = main()
-    (function())*
+    IEvaluate body; Function f;
+}
+{
+    // Parse the program as a set of functions
+    (f = function()
+        { Program.registerFunction(f); }
+    )+
     <EOF>
-    {
-        // Verify that all function calls are defined
-        Function.validateCalls();
-        // After parsing the whole program, evaluate the main body with dummy argument
-        return body.evaluate(Integer.MIN_VALUE);
+
+    {   // Validate the program
+        Program.validate();
+        // After parsing the whole program, run the main body with a dummy arg
+        return Program.call("MAIN", Integer.MIN_VALUE);
     }
 }
