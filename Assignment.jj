@@ -19,24 +19,29 @@ public class Assignment {
             System.out.println(result);
 
         } catch (ParseException e) {
+            // Print failure to the standard output stream
             System.out.println("FAIL");
 
             // Decode ParseException
-            // System.out.println("t<" + e.currentToken.next + ">");
-            // for(int[] a : e.expectedTokenSequences) for(int b : a) System.out.print(b + ",");
-            // System.out.println();
-            // for(String a : e.tokenImage) System.out.print(a + ",");
-            // System.out.println();
+            StringBuffer s = new StringBuffer();
+            s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
 
-            int line = e.currentToken.next.beginLine;
-            String message = e.getMessage();
+            s.append("expected ");
 
-            System.err.println(line);
-            System.err.println(message);
+            for(int[] i : e.expectedTokenSequences) {
+                for(int j : i) {
+                    s.append("[" + e.tokenImage[j] + "], ");
+                }
+            }
+
+            // Output line number and error message to error stream
+            System.err.println(e.currentToken.next.beginLine);
+            System.err.println(s.toString());
 
         } catch (MyParseException e) {
+            // Print failure to the standard output stream
             System.out.println("FAIL");
-
+            // Output line number and error message to error stream
             System.err.println(e.getLine());
             System.err.println(e.getMessage());
 
@@ -48,12 +53,8 @@ public class Assignment {
 }
 
 
-interface IEvaluate {
-    public int evaluate(int arg) throws MyParseException, DivergenceException;
+class DivergenceException extends Exception {
 }
-
-
-class DivergenceException extends Exception { }
 
 
 class MyParseException extends Exception {
@@ -67,6 +68,12 @@ class MyParseException extends Exception {
     public int getLine() {
         return line;
     }
+}
+
+
+// Defines a expression that can be evaluated given the host functions argument
+interface IEvaluate {
+    public int evaluate(int arg) throws MyParseException, DivergenceException;
 }
 
 
@@ -235,11 +242,9 @@ PARSER_END(Assignment)
 
 // PLM token descriptor
 TOKEN : {
-    <DEF: "DEF"> | <MAIN: "MAIN"> | "(" | ")" | "{" | "}" | ";" |
-    <SPACE: " "> | <NEWLINE: "\n"> |
-    <PLUS: "+"> | <MUL: "*"> |
-    <INTEGER_LITERAL: (["0"-"9"])+> |
-    <FUNCTION_NAME: (["A"-"Z"])+> |
+    <DEF: "DEF"> | <MAIN: "MAIN"> | <LBRACE: "{"> | <RBRACE: "}"> | "(" | ")" |
+    <SCOLON: ";"> | <SPACE: " "> | <NEWLINE: "\n"> | <PLUS: "+"> | <MUL: "*"> |
+    <INTEGER_LITERAL: (["0"-"9"])+> | <FUNCTION_NAME: (["A"-"Z"])+> |
     <PARAMETER_NAME: (["a"-"z"])+>
 }
 
@@ -293,7 +298,8 @@ IEvaluate expr(String p) throws MyParseException:
 void function() throws MyParseException:
 { Token t1, t2, t3; IEvaluate body; }
 {
-    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" t3 = <NEWLINE>
+    <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " " <LBRACE> " "
+    body = expr(t2.image) " " <RBRACE> " " <SCOLON> t3 = <NEWLINE>
     // Define a new function using the name, parameter and body
     { Function.define(t1.image, t2.image, body, t3.beginLine); }
 }
@@ -302,7 +308,8 @@ void function() throws MyParseException:
 IEvaluate main() throws MyParseException:
 { IEvaluate body; }
 {
-    <DEF> " " <MAIN> " { " body = expr(null) " } ;" <NEWLINE>
+    <DEF> " " <MAIN> " " <LBRACE> " " body = expr(null) " " <RBRACE> " "
+    <SCOLON> <NEWLINE>
     // Return the main body entry point
     { return body; }
 }
