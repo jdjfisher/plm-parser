@@ -34,7 +34,7 @@ public class Assignment {
             System.err.println(line);
             System.err.println(message);
 
-        } catch (CustomException e) {
+        } catch (MyParseException e) {
             System.out.println("FAIL");
 
             System.err.println(e.getLine());
@@ -49,17 +49,17 @@ public class Assignment {
 
 
 interface IEvaluate {
-    public int evaluate(int arg) throws CustomException, DivergenceException;
+    public int evaluate(int arg) throws MyParseException, DivergenceException;
 }
 
 
 class DivergenceException extends Exception { }
 
 
-class CustomException extends Exception {
+class MyParseException extends Exception {
     private final int line;
 
-    public CustomException(String m, int line) {
+    public MyParseException(String m, int line) {
         super(m);
         this.line = line;
     }
@@ -94,7 +94,7 @@ class Literal implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws CustomException, DivergenceException {
+    public int evaluate(int arg) throws MyParseException, DivergenceException {
         // Provide a different evaluation based on literal type
         switch(type) {
             case CONST:
@@ -130,7 +130,7 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws CustomException, DivergenceException {
+    public int evaluate(int arg) throws MyParseException, DivergenceException {
         // Evaluate the base into result
         int result = base.evaluate(arg);
 
@@ -162,15 +162,15 @@ class Function {
     private static final Stack<String> call_stack = new Stack();
 
 
-    public static int call(String name, int arg) throws CustomException, DivergenceException {
+    public static int call(String name, int arg) throws MyParseException, DivergenceException {
         // Call the function
         return functions.get(name).call(arg);
     }
 
-    public static void define(String name, String param, IEvaluate body, int line) throws CustomException {
+    public static void define(String name, String param, IEvaluate body, int line) throws MyParseException {
         // Check the definition is distinct
         if (Function.isDefined(name)) {
-            throw new CustomException("Duplicate function definition " + name, line);
+            throw new MyParseException("Duplicate function definition " + name, line);
         } else {
             // Register a function object in the programs function map
             Function.functions.put(name, new Function(name, param, body));
@@ -191,13 +191,13 @@ class Function {
         return functions.containsKey(name);
     }
 
-    public static void validateCalls() throws CustomException {
+    public static void validateCalls() throws MyParseException {
         // If there is an undefined function call, throw an error
         if (!undefined_calls.isEmpty()) {
             // Extract first undefined function call and its line number
             Map.Entry entry = undefined_calls.entrySet().iterator().next();
             // Throw an appropriate exception
-            throw new CustomException("Undefined function call " +
+            throw new MyParseException("Undefined function call " +
                 entry.getKey(), (int) entry.getValue());
         }
     }
@@ -212,7 +212,7 @@ class Function {
         this.body = body;
     }
 
-    public int call(int arg) throws CustomException, DivergenceException {
+    public int call(int arg) throws MyParseException, DivergenceException {
         // Check for a recursive stack trace
         if (Function.call_stack.contains(name)) {
             throw new DivergenceException();
@@ -244,7 +244,7 @@ TOKEN : {
 }
 
 
-IEvaluate factor(String param) throws CustomException:
+IEvaluate factor(String param) throws MyParseException:
 { Token t; IEvaluate call_arg; }
 {
     t = <INTEGER_LITERAL>
@@ -256,7 +256,7 @@ IEvaluate factor(String param) throws CustomException:
             String var = t.image;
             // Check the variable matches the parent functions parameter
             if (!var.equals(param)) {
-                throw new CustomException("Undefined variable " + var, t.beginLine);
+                throw new MyParseException("Undefined variable " + var, t.beginLine);
             }
             // Return the parameter reference boxed as a Literal
             return new Literal(param);
@@ -268,7 +268,7 @@ IEvaluate factor(String param) throws CustomException:
 }
 
 
-IEvaluate term(String p) throws CustomException:
+IEvaluate term(String p) throws MyParseException:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
     lhs = factor(p) (LOOKAHEAD(2) <MUL> rhs = term(p)
@@ -279,7 +279,7 @@ IEvaluate term(String p) throws CustomException:
 }
 
 
-IEvaluate expr(String p) throws CustomException:
+IEvaluate expr(String p) throws MyParseException:
 { IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList(); }
 {
     lhs = term(p) (LOOKAHEAD(2) <PLUS> rhs = expr(p)
@@ -290,7 +290,7 @@ IEvaluate expr(String p) throws CustomException:
 }
 
 
-void function() throws CustomException:
+void function() throws MyParseException:
 { Token t1, t2, t3; IEvaluate body; }
 {
     <DEF> " " t1 = <FUNCTION_NAME> " " t2 = <PARAMETER_NAME> " { " body = expr(t2.image) " } ;" t3 = <NEWLINE>
@@ -299,7 +299,7 @@ void function() throws CustomException:
 }
 
 
-IEvaluate main() throws CustomException:
+IEvaluate main() throws MyParseException:
 { IEvaluate body; }
 {
     <DEF> " " <MAIN> " { " body = expr(null) " } ;" <NEWLINE>
@@ -308,7 +308,7 @@ IEvaluate main() throws CustomException:
 }
 
 
-int program() throws CustomException, DivergenceException:
+int program() throws MyParseException, DivergenceException:
 { IEvaluate body; }
 {
     // Parse the program
