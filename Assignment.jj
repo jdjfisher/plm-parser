@@ -22,17 +22,17 @@ public class Assignment {
             // Print failure to the standard output stream
             System.out.println("FAIL");
 
-            // DEBUG
-            StringBuffer s = new StringBuffer();
-            s.append("at [" + e.currentToken + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
-            s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.next.kind] + "]\n");
-            s.append("expected ");
-            for(int[] i : e.expectedTokenSequences) {
-                for(int j : i) {
-                    s.append("[" + e.tokenImage[j] + "], ");
-                }
-            }
-            System.err.println("\n" + s.toString());
+            // // DEBUG
+            // StringBuffer s = new StringBuffer();
+            // s.append("at [" + e.currentToken + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
+            // s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.next.kind] + "]\n");
+            // s.append("expected ");
+            // for(int[] i : e.expectedTokenSequences) {
+            //     for(int j : i) {
+            //         s.append("[" + e.tokenImage[j] + "], ");
+            //     }
+            // }
+            // System.err.println("\n" + s.toString());
 
             // Decode ParseException
             String message = formMessage(e);
@@ -58,11 +58,12 @@ public class Assignment {
     private static String formMessage(ParseException e) {
         int at = e.currentToken.kind;
         int found = e.currentToken.next.kind;
-        Set<Integer> expected = new HashSet();
 
-        // Form a set of expected token kinds
-        for (int[] i : e.expectedTokenSequences)
+        // Form the set of expected token kinds
+        Set<Integer> expected = new HashSet();
+        for (int[] i : e.expectedTokenSequences) {
             expected.add(i[0]);
+        }
 
         //
 
@@ -157,8 +158,8 @@ class DivergenceException extends Exception {
 class MyParseException extends Exception {
     private final int line;
 
-    public MyParseException(String m, int line) {
-        super(m);
+    public MyParseException(String message, int line) {
+        super(message);
         this.line = line;
     }
 
@@ -176,8 +177,8 @@ interface IEvaluate {
 
 class Literal implements IEvaluate {
     private int constant;
-    private String call_name;
-    private IEvaluate call_arg;
+    private String callName;
+    private IEvaluate callArg;
     private Type type;
 
 
@@ -190,12 +191,12 @@ class Literal implements IEvaluate {
         this.type = Type.PARAM;
     }
 
-    public Literal(String call_name, IEvaluate call_arg, int line) {
-        this.call_name = call_name;
-        this.call_arg = call_arg;
+    public Literal(String callName, IEvaluate callArg, int line) {
+        this.callName = callName;
+        this.callArg = callArg;
         this.type = Type.CALL;
         // Acknowledge this function call
-        Program.registerCall(call_name, line);
+        Program.registerCall(callName, line);
     }
 
     @Override
@@ -210,8 +211,8 @@ class Literal implements IEvaluate {
                 return arg;
             case CALL:
                 // Evaluate the argument and call the function with the value
-                int value = call_arg.evaluate(arg);
-                return Program.call(call_name, value);
+                int value = callArg.evaluate(arg);
+                return Program.call(callName, value);
             default:
                 throw new Error("FATAL: null literal type");
         }
@@ -279,13 +280,13 @@ class Function {
 
 class Program {
     private static final Map<String, Function> functions = new HashMap();
-    private static final Map<String, Integer> undefined_calls = new HashMap();
-    private static final Stack<String> call_stack = new Stack();
+    private static final Map<String, Integer> undefinedCalls = new HashMap();
+    private static final Stack<String> callStack = new Stack();
 
 
     public static int call(String name, int arg) throws MyParseException, DivergenceException {
         // Check for a recursive stack trace
-        if (Program.call_stack.contains(name)) {
+        if (Program.callStack.contains(name)) {
             throw new DivergenceException();
         }
 
@@ -293,9 +294,9 @@ class Program {
         Function function = Program.functions.get(name);
 
         // Evaluate the function call and regulate the call stack
-        Program.call_stack.push(name);
+        Program.callStack.push(name);
         int result = function.body.evaluate(arg);
-        Program.call_stack.pop();
+        Program.callStack.pop();
 
         return result;
     }
@@ -308,14 +309,14 @@ class Program {
             // Register a function object in the programs function map
             Program.functions.put(f.name, f);
             // Resolve any undefined calls to the function
-            undefined_calls.remove(f.name);
+            undefinedCalls.remove(f.name);
         }
     }
 
     public static void registerCall(String name, int line) {
         // If the function is undefined, store the call
         if (!Program.functions.containsKey(name)) {
-            undefined_calls.putIfAbsent(name, line);
+            undefinedCalls.putIfAbsent(name, line);
         }
     }
 
@@ -326,9 +327,9 @@ class Program {
         }
 
         // If there is a call to an undefined function, throw an error
-        if (!undefined_calls.isEmpty()) {
+        if (!undefinedCalls.isEmpty()) {
             // Extract first undefined function call and its line number
-            Map.Entry entry = undefined_calls.entrySet().iterator().next();
+            Map.Entry entry = undefinedCalls.entrySet().iterator().next();
 
             throw new MyParseException("Undefined function " + entry.getKey(),
                                                       (int) entry.getValue());
@@ -355,7 +356,7 @@ TOKEN:
 
 IEvaluate factor(String param) throws MyParseException:
 {
-    Token t; IEvaluate call_arg;
+    Token t; IEvaluate callArg;
 }
 {
     t = <INTEGER_LITERAL>
@@ -374,9 +375,9 @@ IEvaluate factor(String param) throws MyParseException:
             return new Literal(param);
         }
 
-    | t = <FUNCTION_NAME> "(" call_arg = expr(param) ")"
+    | t = <FUNCTION_NAME> "(" callArg = expr(param) ")"
         {   // Return the function call boxed as a Literal
-            return new Literal(t.image, call_arg, t.beginLine);
+            return new Literal(t.image, callArg, t.beginLine);
         }
 }
 
