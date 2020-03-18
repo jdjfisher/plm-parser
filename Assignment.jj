@@ -36,7 +36,7 @@ public class Assignment {
 
 
             // Decode ParseException
-            String message = formMessage(e);
+            String message = formMessage2(e);
             int line = e.currentToken.next.beginLine;
 
             // Output line number and message to error stream
@@ -94,7 +94,7 @@ public class Assignment {
                                 return "Invalid function name " + currentToken.image + nextToken.image + "...";
                             case PARAMETER_NAME:
                                 return "Invalid parameter name " + currentToken.image + nextToken.image + "...";
-                        }                    
+                        }
                 }
             case LBRACE:
                 if (nextToken.kind == PARAMETER_NAME) {
@@ -107,6 +107,77 @@ public class Assignment {
                 return "Missing function body";
             case EOF:
                 return "Missing end of file character";
+        }
+
+        return "Unclassified parse error";
+    }
+
+    private static String formMessage2(ParseException e) {
+        int at = e.currentToken.kind;
+        int found = e.currentToken.next.kind;
+
+        switch (found) {
+            case SPACE:
+                return "Unexpected space";
+            case NEWLINE:
+                return "Unexpected new line";
+        }
+
+        int expected = e.expectedTokenSequences[0][0];
+
+        switch (expected) {
+            case DEF:
+                return "Missing keyword DEF";
+            case MAIN:
+                return "Missing MAIN function";
+            case FUNCTION_NAME:
+                if (found == MAIN) {
+                    return "Duplicate MAIN definition";
+                } else {
+                    return "Missing function name";
+                }
+            case PARAMETER_NAME:
+                return "Missing parameter name";
+            case LBRACE:
+                if (found == PARAMETER_NAME) {
+                    return "MAIN definition should have no parameter";
+                } else {
+                    return "Missing {";
+                }
+            case RBRACE:
+                return "Missing }";
+            case LBRACK:
+                return "Missing (";
+            case RBRACK:
+                return "Missing )";
+            case SCOLON:
+                return "Missing ;";
+            case NEWLINE:
+                return "Missing new line character";
+            case EOF:
+                return "Missing end of file character";
+            case SPACE:
+                switch (found) {
+                    case LBRACE:
+                    case RBRACE:
+                    case SCOLON:
+                    case NEWLINE:
+                    case EOF:
+                        return "Missing space";
+                }
+
+                switch (at) {
+                    case FUNCTION_NAME:
+                        return "Invalid function name";
+                    case PARAMETER_NAME:
+                        return "Invalid parameter name";
+                }
+            case INTEGER_LITERAL:
+                if (at == LBRACK) {
+                    return "Invalid function call argument";
+                } else if (at == SPACE) {
+                    return "Invalid function body";
+                }
         }
 
         return "Unclassified parse error";
@@ -265,7 +336,7 @@ class Function {
             // Extract first undefined function call and its line number
             Map.Entry entry = undefined_calls.entrySet().iterator().next();
             // Throw an appropriate exception
-            throw new MyParseException("Undefined function call " +
+            throw new MyParseException("Undefined function " +
                 entry.getKey(), (int) entry.getValue());
         }
     }
@@ -303,8 +374,9 @@ PARSER_END(Assignment)
 
 // PLM token descriptor
 TOKEN : {
-    <DEF: "DEF"> | <MAIN: "MAIN"> | <LBRACE: "{"> | <RBRACE: "}"> | "(" | ")" |
-    <SCOLON: ";"> | <SPACE: " "> | <NEWLINE: "\n"> | <PLUS: "+"> | <MUL: "*"> |
+    <DEF: "DEF"> | <MAIN: "MAIN"> | <LBRACE: "{"> | <RBRACE: "}"> |
+    <LBRACK: "("> | <RBRACK: ")"> | <SCOLON: ";"> | <SPACE: " "> |
+    <NEWLINE: "\n"> | <PLUS: "+"> | <MUL: "*"> |
     <INTEGER_LITERAL: (["0"-"9"])+> | <FUNCTION_NAME: (["A"-"Z"])+> |
     <PARAMETER_NAME: (["a"-"z"])+>
 }
