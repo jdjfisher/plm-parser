@@ -22,21 +22,26 @@ public class Assignment {
             // Print failure to the standard output stream
             System.out.println("FAIL");
 
-            // Decode ParseException
+            // DEBUG
             StringBuffer s = new StringBuffer();
-            s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
-
+            s.append("at [" + e.currentToken + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
+            s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.next.kind] + "]\n");
             s.append("expected ");
-
             for(int[] i : e.expectedTokenSequences) {
                 for(int j : i) {
                     s.append("[" + e.tokenImage[j] + "], ");
                 }
             }
+            System.err.println("\n" + s.toString());
 
-            // Output line number and error message to error stream
-            System.err.println(e.currentToken.next.beginLine);
-            System.err.println(s.toString());
+
+            // Decode ParseException
+            String message = formMessage(e);
+            int line = e.currentToken.next.beginLine;
+
+            // Output line number and message to error stream
+            System.err.println(line);
+            System.err.println(message);
 
         } catch (MyParseException e) {
             // Print failure to the standard output stream
@@ -49,6 +54,50 @@ public class Assignment {
             System.out.println("PASS");
             System.out.println("DIVERGENCE");
         }
+    }
+
+    private static String formMessage(ParseException e) {
+        int expectedTokenKind = e.expectedTokenSequences[0][0];
+        Token currentToken = e.currentToken;
+        Token nextToken = e.currentToken.next;
+
+        switch (expectedTokenKind) {
+            case DEF:
+                return "Missing keyword DEF";
+            case MAIN:
+                return "Missing MAIN function";
+            case FUNCTION_NAME:
+                return "Missing function name";
+            case PARAMETER_NAME:
+                return "Missing parameter name";
+            case SPACE:
+                switch (nextToken.kind) {
+                    case LBRACE:
+                    case RBRACE:
+                    case SCOLON:
+                    case NEWLINE:
+                    case EOF:
+                        return "Missing space after " + currentToken;
+                    default:
+                        switch (currentToken.kind) {
+                            case FUNCTION_NAME:
+                                return "Invalid function name " + currentToken.image + nextToken.image + "...";
+                            case PARAMETER_NAME:
+                                return "Invalid parameter name " + currentToken.image + nextToken.image + "...";
+                        }
+                        break;
+                }
+            case LBRACE:
+            case RBRACE:
+            case SCOLON:
+                return "Missing " + e.tokenImage[expectedTokenKind];
+            case INTEGER_LITERAL:
+                return "Missing function body";
+            case EOF:
+                return "Missing end of file character";
+        }
+
+        return "Unclassified parse error";
     }
 }
 
