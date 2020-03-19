@@ -75,10 +75,10 @@ public class Assignment {
         if (expected.contains(DEF))
             return "Missing keyword DEF";
 
-        if (expected.contains(FUNCTION_NAME) && !expected.contains(INTEGER_LITERAL))
+        if (expected.contains(FUNCTION_NAME) && (expected.contains(MAIN) || expected.size() == 1))
             return "Missing function name";
 
-        if (at == FUNCTION_NAME)
+        if (at == FUNCTION_NAME || at == MAIN)
             return "Invalid function name";
 
         if (expected.contains(PARAMETER_NAME) && expected.size() == 1)
@@ -143,6 +143,7 @@ public class Assignment {
                 return "Unexpected }";
         }
 
+        // Error type could not be inferred, default to this
         return "Unclassified parse error";
     }
 }
@@ -293,7 +294,7 @@ class Program {
 
     // Call a defined function
     public static int call(String name, int arg) throws MyParseException {
-        // Check for a recursive stack trace and break next call if found
+        // Check for a recursive stack trace and skip next call if found
         if (Program.callStack.contains(name)) {
             divergence = true;
             return arg;
