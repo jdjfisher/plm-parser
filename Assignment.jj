@@ -6,7 +6,7 @@ import java.util.*;
 
 // JavaCC Parser class
 public class Assignment {
-    
+
     public static void main(String args []) {
         // Instantain parser object on the PLM program
         Assignment parser = new Assignment(System.in);
@@ -14,16 +14,24 @@ public class Assignment {
         try {
             // Attempt to parse and then evaluate the PLM program
             int result = parser.program();
-            // Report successful numerical evaluation
+
+            // Report evaluation
             System.out.println("PASS");
-            System.out.println(result);
+
+            if (Program.diverges()) {
+                System.out.println("DIVERGENCE");
+            } else {
+                System.out.println(result);
+            }
 
         } catch (ParseException e) {
             // Print failure to the standard output stream
             System.out.println("FAIL");
+
             // Decode ParseException
             String message = formMessage(e);
             int line = e.currentToken.next.beginLine;
+
             // Output line number and message to error stream
             System.err.println(line);
             System.err.println(message);
@@ -31,13 +39,10 @@ public class Assignment {
         } catch (MyParseException e) {
             // Print failure to the standard output stream
             System.out.println("FAIL");
+
             // Output line number and error message to error stream
             System.err.println(e.getLine());
             System.err.println(e.getMessage());
-
-        } catch (DivergenceException e) {
-            System.out.println("PASS");
-            System.out.println("DIVERGENCE");
         }
     }
 
@@ -143,10 +148,6 @@ public class Assignment {
 }
 
 
-class DivergenceException extends Exception {
-}
-
-
 // Exception wrapper for tracking PLM line number
 class MyParseException extends Exception {
     private final int line;
@@ -165,7 +166,7 @@ class MyParseException extends Exception {
 
 // Defines a expression that can be evaluated given the host functions argument
 interface IEvaluate {
-    public int evaluate(int arg) throws MyParseException, DivergenceException;
+    public int evaluate(int arg) throws MyParseException;
 }
 
 
@@ -197,7 +198,7 @@ class Literal implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException, DivergenceException {
+    public int evaluate(int arg) throws MyParseException {
         // Provide a different evaluation based on literal type
         switch(type) {
             case CONST:
@@ -236,7 +237,7 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException, DivergenceException {
+    public int evaluate(int arg) throws MyParseException {
         // Evaluate the base into result
         int result = base.evaluate(arg);
 
@@ -279,7 +280,7 @@ class Function implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException, DivergenceException {
+    public int evaluate(int arg) throws MyParseException {
         return body.evaluate(arg);
     }
 }
@@ -288,12 +289,14 @@ class Program {
     private static final Map<String, Function> functions = new HashMap();
     private static final Map<String, Integer> undefinedCalls = new HashMap();
     private static final Stack<String> callStack = new Stack();
+    private static boolean divergence = false;
 
     // Call a defined function
-    public static int call(String name, int arg) throws MyParseException, DivergenceException {
-        // Check for a recursive stack trace
+    public static int call(String name, int arg) throws MyParseException {
+        // Check for a recursive stack trace and break next call if found
         if (Program.callStack.contains(name)) {
-            throw new DivergenceException();
+            divergence = true;
+            return arg;
         }
 
         // Get the function
@@ -343,6 +346,11 @@ class Program {
             throw new MyParseException("Undefined function " + entry.getKey(),
                                                       (int) entry.getValue());
         }
+    }
+
+    // Does the program diverge
+    public static boolean diverges() {
+        return divergence;
     }
 }
 
@@ -437,7 +445,7 @@ Function function() throws MyParseException:
     }
 }
 
-int program() throws MyParseException, DivergenceException:
+int program() throws MyParseException:
 {
     IEvaluate body; Function f;
 }
