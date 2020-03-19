@@ -4,15 +4,15 @@ PARSER_BEGIN(Assignment)
 import java.util.*;
 
 
-// Parser class
+// JavaCC Parser class
 public class Assignment {
-
+    
     public static void main(String args []) {
-        // Instantain parser object
+        // Instantain parser object on the PLM program
         Assignment parser = new Assignment(System.in);
 
         try {
-            // Attempt to parse and then evaluate a PLM program
+            // Attempt to parse and then evaluate the PLM program
             int result = parser.program();
             // Report successful numerical evaluation
             System.out.println("PASS");
@@ -21,23 +21,9 @@ public class Assignment {
         } catch (ParseException e) {
             // Print failure to the standard output stream
             System.out.println("FAIL");
-
-            // // DEBUG
-            // StringBuffer s = new StringBuffer();
-            // s.append("at [" + e.currentToken + "] kind [" + e.tokenImage[e.currentToken.kind] + "]\n");
-            // s.append("encountered [" + e.currentToken.next + "] kind [" + e.tokenImage[e.currentToken.next.kind] + "]\n");
-            // s.append("expected ");
-            // for(int[] i : e.expectedTokenSequences) {
-            //     for(int j : i) {
-            //         s.append("[" + e.tokenImage[j] + "], ");
-            //     }
-            // }
-            // System.err.println("\n" + s.toString());
-
             // Decode ParseException
             String message = formMessage(e);
             int line = e.currentToken.next.beginLine;
-
             // Output line number and message to error stream
             System.err.println(line);
             System.err.println(message);
@@ -65,7 +51,7 @@ public class Assignment {
             expected.add(i[0]);
         }
 
-        //
+        // Determine an appropriate error message from the caught tokens
 
         if (found == SPACE)
             return "Unexpected space";
@@ -86,9 +72,6 @@ public class Assignment {
 
         if (expected.contains(FUNCTION_NAME) && !expected.contains(INTEGER_LITERAL))
             return "Missing function name";
-
-        if (expected.contains(FUNCTION_NAME) && found == MAIN)
-            return "Duplicate MAIN definition";
 
         if (at == FUNCTION_NAME)
             return "Invalid function name";
@@ -135,6 +118,15 @@ public class Assignment {
             }
         }
 
+        switch (at) {
+            case INTEGER_LITERAL:
+            case PARAMETER_NAME:
+            case FUNCTION_NAME:
+                if (found == PLUS || found == MUL) {
+                    return "Missing operand";
+                }
+        }
+
         switch (found) {
             case NEWLINE:
                 return "Unexpected new line";
@@ -155,9 +147,11 @@ class DivergenceException extends Exception {
 }
 
 
+// Exception wrapper for tracking PLM line number
 class MyParseException extends Exception {
     private final int line;
 
+    // Constructor
     public MyParseException(String message, int line) {
         super(message);
         this.line = line;
@@ -175,22 +169,25 @@ interface IEvaluate {
 }
 
 
+// Literal expression construct
 class Literal implements IEvaluate {
     private int constant;
     private String callName;
     private IEvaluate callArg;
     private Type type;
 
-
+    // Constructor
     public Literal(int constant) {
         this.constant = constant;
         this.type = Type.CONST;
     }
 
+    // Constructor
     public Literal(String param) {
         this.type = Type.PARAM;
     }
 
+    // Constructor
     public Literal(String callName, IEvaluate callArg, int line) {
         this.callName = callName;
         this.callArg = callArg;
@@ -224,12 +221,14 @@ class Literal implements IEvaluate {
     }
 }
 
+
+// Binary operation fold expression construct
 class BinFold implements IEvaluate {
     private final IEvaluate base;
     private final List<IEvaluate> operands;
     private final Type type;
 
-
+    // Constructor
     public BinFold(IEvaluate base, List<IEvaluate> operands, Type type) {
         this.base = base;
         this.operands = operands;
@@ -263,18 +262,25 @@ class BinFold implements IEvaluate {
     }
 }
 
-class Function {
+
+// Function construct
+class Function implements IEvaluate {
     public final String name;
     public final String param;
     public final IEvaluate body;
     public final int line;
 
-
+    // Constructor
     public Function(String name, String param, IEvaluate body, int line) {
         this.name = name;
         this.param = param;
         this.body = body;
         this.line = line;
+    }
+
+    @Override
+    public int evaluate(int arg) throws MyParseException, DivergenceException {
+        return body.evaluate(arg);
     }
 }
 
@@ -283,7 +289,7 @@ class Program {
     private static final Map<String, Integer> undefinedCalls = new HashMap();
     private static final Stack<String> callStack = new Stack();
 
-
+    // Call a defined function
     public static int call(String name, int arg) throws MyParseException, DivergenceException {
         // Check for a recursive stack trace
         if (Program.callStack.contains(name)) {
@@ -295,12 +301,13 @@ class Program {
 
         // Evaluate the function call and regulate the call stack
         Program.callStack.push(name);
-        int result = function.body.evaluate(arg);
+        int result = function.evaluate(arg);
         Program.callStack.pop();
 
         return result;
     }
 
+    // Register a distinct function definition
     public static void registerFunction(Function f) throws MyParseException {
         // Check the definition is distinct
         if (Program.functions.containsKey(f.name)) {
@@ -313,6 +320,7 @@ class Program {
         }
     }
 
+    // Register a potentially unmatched function call
     public static void registerCall(String name, int line) {
         // If the function is undefined, store the call
         if (!Program.functions.containsKey(name)) {
@@ -320,6 +328,7 @@ class Program {
         }
     }
 
+    // Validate the program
     public static void validate() throws MyParseException {
         // If the MAIN function has not been defined, throw an error
         if (!Program.functions.containsKey("MAIN")) {
@@ -341,9 +350,8 @@ class Program {
 PARSER_END(Assignment)
 
 
-// No skip tokens, unnecessary tokens should result in a parse failure
-
-// PLM token descriptor
+// PLM token descriptor. Note there are no defined skip tokens, unnecessary
+// tokens should result in a parse failure
 TOKEN:
 {
     <DEF: "DEF"> | <MAIN: "MAIN"> | <LBRACE: "{"> | <RBRACE: "}"> |
@@ -417,11 +425,11 @@ Function function() throws MyParseException:
     Token t1, t2 = new Token(); IEvaluate body;
 }
 {
-    <DEF> <SPACE>                           // Function signature
+    <DEF> <SPACE>                                      // Function signature
         ( t1 = <FUNCTION_NAME> <SPACE> t2 = <PARAMETER_NAME> | t1 = <MAIN> )
 
-    <SPACE> <LBRACE> <SPACE>                // Function body
-        body = expr(t2.image)
+    <SPACE> <LBRACE> <SPACE>
+        body = expr(t2.image)   // Function body
     <SPACE> <RBRACE> <SPACE> <SCOLON> <NEWLINE>
 
     {   // Define a new function using the name, parameter, body and line number
