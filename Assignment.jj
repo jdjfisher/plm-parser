@@ -61,6 +61,9 @@ public class Assignment {
         if (found == SPACE)
             return "Unexpected space";
 
+        if (expected.contains(DEF))
+            return "Missing keyword DEF";
+
         if (expected.contains(SPACE)) {
             switch (found) {
                 case LBRACE:
@@ -72,13 +75,10 @@ public class Assignment {
             }
         }
 
-        if (expected.contains(DEF))
-            return "Missing keyword DEF";
-
-        if (expected.contains(FUNCTION_NAME) && (expected.contains(MAIN) || expected.size() == 1))
+        if (expected.contains(FUNCTION_NAME) && expected.contains(MAIN))
             return "Missing function name";
 
-        if (at == FUNCTION_NAME || at == MAIN)
+        if ((at == FUNCTION_NAME || at == MAIN) && expected.contains(SPACE))
             return "Invalid function name";
 
         if (expected.contains(PARAMETER_NAME) && expected.size() == 1)
@@ -95,17 +95,8 @@ public class Assignment {
             }
         }
 
-        if (expected.contains(RBRACE))
-            return "Missing }";
-
-        if (expected.contains(LBRACK))
-            return "Missing (";
-
-        if (expected.contains(LBRACK))
-            return "Missing )";
-
-        if (expected.contains(SCOLON))
-            return "Missing ;";
+        if (at == FUNCTION_NAME && expected.contains(LBRACK))
+            return "Invalid function call";
 
         if (expected.contains(INTEGER_LITERAL) && expected.contains(PARAMETER_NAME) && expected.contains(FUNCTION_NAME)) {
             if (at == LBRACK) {
@@ -132,15 +123,20 @@ public class Assignment {
                 }
         }
 
+        if (expected.contains(RBRACK))
+            return "Missing )";
+
+        if (expected.contains(RBRACE))
+            return "Missing }";
+
+        if (expected.contains(SCOLON))
+            return "Missing ;";
+
         switch (found) {
             case NEWLINE:
                 return "Unexpected new line";
             case EOF:
                 return "Unexpected end of file";
-            case RBRACK:
-                return "Unexpected )";
-            case RBRACE:
-                return "Unexpected }";
         }
 
         // Error type could not be inferred, default to this
