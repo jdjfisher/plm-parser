@@ -1,6 +1,10 @@
+
 PARSER_BEGIN(Assignment)
 
 
+// Standard library imports
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.*;
 
 
@@ -17,38 +21,47 @@ public class Assignment {
 
             // Report evaluation
             System.out.println("PASS");
+            System.out.println(Program.diverges() ? "DIVERGENCE" : result);
 
-            if (Program.diverges()) {
-                System.out.println("DIVERGENCE");
-            } else {
-                System.out.println(result);
-            }
-
-        } catch (ParseException e) {
+        } catch (Throwable t) {
             // Print failure to the standard output stream
             System.out.println("FAIL");
+            int line = 0;
+            String message = "Unclassified parse error";
 
-            // Decode ParseException
-            String message = formMessage(e);
-            int line = e.currentToken.next.beginLine;
+            try {
+                // Pass the Throwable to the specific handlers
+                throw t;
+
+            } catch (MyParseException e) {
+                // Decode MyParseException
+                line = e.getLine();
+                message = e.getMessage();
+
+            } catch(ParseException e) {
+                // Decode ParseException
+                line = e.currentToken.next.beginLine;
+                message = decodeParseException(e);
+
+            } catch(TokenMgrError e) {
+                // Decode TokenMgrError
+                Matcher matcher = Pattern.compile("line \\d+").matcher(e.getMessage());
+                if (matcher.find())
+                    line = Integer.parseInt(matcher.group().replace("line ", ""));
+
+                message = "Unknown symbol";
+            }
 
             // Output line number and message to error stream
             System.err.println(line);
             System.err.println(message);
-
-        } catch (MyParseException e) {
-            // Print failure to the standard output stream
-            System.out.println("FAIL");
-
-            // Output line number and error message to error stream
-            System.err.println(e.getLine());
-            System.err.println(e.getMessage());
         }
     }
 
-    private static String formMessage(ParseException e) {
+    private static String decodeParseException(ParseException e) {
         int at = e.currentToken.kind;
         int found = e.currentToken.next.kind;
+        String str = e.currentToken.image + e.currentToken.next.image + "...";
 
         // Form the set of expected token kinds
         Set<Integer> expected = new HashSet();
@@ -56,7 +69,8 @@ public class Assignment {
             expected.add(i[0]);
         }
 
-        // Determine an appropriate error message from the caught tokens
+        // Determine an appropriate error message from the caught
+        // tokens via case analysis
 
         if (found == SPACE)
             return "Unexpected space";
@@ -79,13 +93,18 @@ public class Assignment {
             return "Missing function name";
 
         if ((at == FUNCTION_NAME || at == MAIN) && expected.contains(SPACE))
-            return "Invalid function name";
+            return "Invalid function name " + str;
 
         if (expected.contains(PARAMETER_NAME) && expected.size() == 1)
             return "Missing parameter name";
 
-        if (at == PARAMETER_NAME)
-            return "Invalid parameter name";
+        if (at == PARAMETER_NAME) {
+            if (expected.contains(SPACE) && expected.size() == 1) {
+                return "Invalid parameter name " + str;
+            } else {
+                return "Invalid parameter reference " + str;
+            }
+        }
 
         if (expected.contains(LBRACE)) {
             if (found == PARAMETER_NAME) {
@@ -96,7 +115,7 @@ public class Assignment {
         }
 
         if (at == FUNCTION_NAME && expected.contains(LBRACK))
-            return "Invalid function call";
+            return "Invalid function call " + str;
 
         if (expected.contains(INTEGER_LITERAL) && expected.contains(PARAMETER_NAME) && expected.contains(FUNCTION_NAME)) {
             if (at == LBRACK) {
@@ -119,7 +138,7 @@ public class Assignment {
             case PARAMETER_NAME:
             case FUNCTION_NAME:
                 if (found == PLUS || found == MUL) {
-                    return "Missing operand";
+                    return "Missing operand " + str;
                 }
         }
 
@@ -367,6 +386,7 @@ TOKEN:
 }
 
 
+// factor/literal non-terminal
 IEvaluate factor(String param) throws MyParseException:
 {
     Token t; IEvaluate callArg;
@@ -395,6 +415,7 @@ IEvaluate factor(String param) throws MyParseException:
 }
 
 
+// term non-terminal
 IEvaluate term(String p) throws MyParseException:
 {
     IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
@@ -410,6 +431,7 @@ IEvaluate term(String p) throws MyParseException:
 }
 
 
+// expression non-terminal
 IEvaluate expr(String p) throws MyParseException:
 {
     IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
@@ -425,6 +447,7 @@ IEvaluate expr(String p) throws MyParseException:
 }
 
 
+// function non-terminal
 Function function() throws MyParseException:
 {
     Token t1, t2 = new Token(); IEvaluate body;
@@ -442,6 +465,8 @@ Function function() throws MyParseException:
     }
 }
 
+
+// program root non-terminal
 int program() throws MyParseException:
 {
     IEvaluate body; Function f;
