@@ -33,8 +33,8 @@ public class Assignment {
                 // Pass the Throwable to the specific handlers
                 throw t;
 
-            } catch (MyParseException e) {
-                // Decode MyParseException
+            } catch (PLMParseException e) {
+                // Decode PLMParseException
                 line = e.getLine();
                 message = e.getMessage();
 
@@ -49,7 +49,7 @@ public class Assignment {
                 if (matcher.find())
                     line = Integer.parseInt(matcher.group().replace("line ", ""));
 
-                message = "Unknown symbol";
+                message = "Illegal symbol";
             }
 
             // Output line number and message to error stream
@@ -89,8 +89,12 @@ public class Assignment {
             }
         }
 
-        if (expected.contains(FUNCTION_NAME) && expected.contains(MAIN))
+        if (expected.contains(FUNCTION_NAME) && expected.contains(MAIN)) {
+            if (found == DEF)
+                return "DEF is not a valid function name";
+
             return "Missing function name";
+        }
 
         if ((at == FUNCTION_NAME || at == MAIN) && expected.contains(SPACE))
             return "Invalid function name " + str;
@@ -118,9 +122,11 @@ public class Assignment {
             return "Invalid function call " + str;
 
         if (expected.contains(INTEGER_LITERAL) && expected.contains(PARAMETER_NAME) && expected.contains(FUNCTION_NAME)) {
+            if (found == MAIN)
+                return "Cannot call MAIN";
+
             if (at == LBRACK) {
                 return "Missing function call argument";
-
             } else if (at == SPACE) {
                 switch (found) {
                     case RBRACE:
@@ -165,11 +171,11 @@ public class Assignment {
 
 
 // Exception wrapper for tracking PLM line number
-class MyParseException extends Exception {
+class PLMParseException extends Exception {
     private final int line;
 
     // Constructor
-    public MyParseException(String message, int line) {
+    public PLMParseException(String message, int line) {
         super(message);
         this.line = line;
     }
@@ -182,7 +188,7 @@ class MyParseException extends Exception {
 
 // Defines a expression that can be evaluated given the host functions argument
 interface IEvaluate {
-    public int evaluate(int arg) throws MyParseException;
+    public int evaluate(int arg) throws PLMParseException;
 }
 
 
@@ -214,7 +220,7 @@ class Literal implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException {
+    public int evaluate(int arg) throws PLMParseException {
         // Provide a different evaluation based on literal type
         switch(type) {
             case CONST:
@@ -253,7 +259,7 @@ class BinFold implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException {
+    public int evaluate(int arg) throws PLMParseException {
         // Evaluate the base into result
         int result = base.evaluate(arg);
 
@@ -296,7 +302,7 @@ class Function implements IEvaluate {
     }
 
     @Override
-    public int evaluate(int arg) throws MyParseException {
+    public int evaluate(int arg) throws PLMParseException {
         return body.evaluate(arg);
     }
 }
@@ -308,7 +314,7 @@ class Program {
     private static boolean divergence = false;
 
     // Call a defined function
-    public static int call(String name, int arg) throws MyParseException {
+    public static int call(String name, int arg) throws PLMParseException {
         // Check for a recursive stack trace and skip next call if found
         if (Program.callStack.contains(name)) {
             divergence = true;
@@ -327,10 +333,10 @@ class Program {
     }
 
     // Register a distinct function definition
-    public static void registerFunction(Function f) throws MyParseException {
+    public static void registerFunction(Function f) throws PLMParseException {
         // Check the definition is distinct
         if (Program.functions.containsKey(f.name)) {
-            throw new MyParseException("Duplicate function definition " + f.name, f.line);
+            throw new PLMParseException("Duplicate function definition " + f.name, f.line);
         } else {
             // Register a function object in the programs function map
             Program.functions.put(f.name, f);
@@ -348,10 +354,10 @@ class Program {
     }
 
     // Validate the program
-    public static void validate() throws MyParseException {
+    public static void validate() throws PLMParseException {
         // If the MAIN function has not been defined, throw an error
         if (!Program.functions.containsKey("MAIN")) {
-            throw new MyParseException("Undefined MAIN function", 0);
+            throw new PLMParseException("Undefined MAIN function", 0);
         }
 
         // If there is a call to an undefined function, throw an error
@@ -359,8 +365,7 @@ class Program {
             // Extract first undefined function call and its line number
             Map.Entry entry = undefinedCalls.entrySet().iterator().next();
 
-            throw new MyParseException("Undefined function " + entry.getKey(),
-                                                      (int) entry.getValue());
+            throw new PLMParseException("Undefined function " + entry.getKey(), (int) entry.getValue());
         }
     }
 
@@ -387,7 +392,7 @@ TOKEN:
 
 
 // factor/literal non-terminal
-IEvaluate factor(String param) throws MyParseException:
+IEvaluate factor(String param) throws PLMParseException:
 {
     Token t; IEvaluate callArg;
 }
@@ -396,18 +401,16 @@ IEvaluate factor(String param) throws MyParseException:
         {   // Return the constant value boxed as a Literal
             return new Literal(Integer.parseInt(t.image));
         }
-
     | t = <PARAMETER_NAME>
         {
             String var = t.image;
             // Check the variable matches the parent functions parameter
             if (!var.equals(param)) {
-                throw new MyParseException("Undefined variable " + var, t.beginLine);
+                throw new PLMParseException("Undefined variable " + var, t.beginLine);
             }
             // Return the parameter reference boxed as a Literal
             return new Literal(param);
         }
-
     | t = <FUNCTION_NAME> "(" callArg = expr(param) ")"
         {   // Return the function call boxed as a Literal
             return new Literal(t.image, callArg, t.beginLine);
@@ -416,7 +419,7 @@ IEvaluate factor(String param) throws MyParseException:
 
 
 // term non-terminal
-IEvaluate term(String p) throws MyParseException:
+IEvaluate term(String p) throws PLMParseException:
 {
     IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
 }
@@ -424,7 +427,6 @@ IEvaluate term(String p) throws MyParseException:
     lhs = factor(p) (LOOKAHEAD(2) <MUL> rhs = term(p)
         { operands.add(rhs); }
     )*
-
     {   // Return an object respresentation of a multiplicative fold on factors
         return new BinFold(lhs, operands, BinFold.Type.MUL);
     }
@@ -432,7 +434,7 @@ IEvaluate term(String p) throws MyParseException:
 
 
 // expression non-terminal
-IEvaluate expr(String p) throws MyParseException:
+IEvaluate expr(String p) throws PLMParseException:
 {
     IEvaluate lhs, rhs; List<IEvaluate> operands = new ArrayList();
 }
@@ -440,7 +442,6 @@ IEvaluate expr(String p) throws MyParseException:
     lhs = term(p) (LOOKAHEAD(2) <PLUS> rhs = expr(p)
         { operands.add(rhs); }
     )*
-
     {   // Return an object respresentation of a addative fold on terms
         return new BinFold(lhs, operands, BinFold.Type.PLUS);
     }
@@ -448,18 +449,16 @@ IEvaluate expr(String p) throws MyParseException:
 
 
 // function non-terminal
-Function function() throws MyParseException:
+Function function() throws PLMParseException:
 {
     Token t1, t2 = new Token(); IEvaluate body;
 }
 {
-    <DEF> <SPACE>                                      // Function signature
-        ( t1 = <FUNCTION_NAME> <SPACE> t2 = <PARAMETER_NAME> | t1 = <MAIN> )
-
+    <DEF> <SPACE>
+        ( t1 = <FUNCTION_NAME> <SPACE> t2 = <PARAMETER_NAME> | t1 = <MAIN> )   // Function signature
     <SPACE> <LBRACE> <SPACE>
         body = expr(t2.image)   // Function body
     <SPACE> <RBRACE> <SPACE> <SCOLON> <NEWLINE>
-
     {   // Define a new function using the name, parameter, body and line number
         return new Function(t1.image, t2.image, body, t1.beginLine);
     }
@@ -467,7 +466,7 @@ Function function() throws MyParseException:
 
 
 // program root non-terminal
-int program() throws MyParseException:
+int program() throws PLMParseException:
 {
     IEvaluate body; Function f;
 }
@@ -477,7 +476,6 @@ int program() throws MyParseException:
         { Program.registerFunction(f); }
     )+
     <EOF>
-
     {   // Validate the program
         Program.validate();
         // After parsing the whole program, run the main body with a dummy arg
